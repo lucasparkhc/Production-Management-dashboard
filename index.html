@@ -101,6 +101,7 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .sum-table thead th { position: sticky; top: 0; z-index: 2; background: var(--accent-soft); color: var(--fg); font-weight: 600; white-space: pre-line; line-height: 1.25; vertical-align: bottom; border-bottom: 2px solid var(--accent); }
 .sum-table .k { text-align: left; position: sticky; left: 0; z-index: 1; font-weight: 500; }
 .sum-table thead .k { z-index: 3; }
+.sum-table .g { text-align: left; font-weight: 500; }
 .sum-table td.z { color: var(--muted); opacity: 0.55; }
 .sum-table tbody tr:hover td { background: var(--slot); }
 .sum-table tfoot td { position: sticky; bottom: 0; font-weight: 700; background: var(--accent-soft); border-top: 2px solid var(--accent); border-bottom: 0; }
@@ -383,11 +384,11 @@ function renderSummary() {
   });
   var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
   var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
-  var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="k" style="position:static">Grp. Name</th>';
+  var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="g">Grp. Name</th>';
   cols.forEach(function (c) { html += "<th>" + esc(c.label) + "</th>"; });
   html += "</tr></thead><tbody>";
   groups.forEach(function (g) {
-    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="k" style="position:static">' + esc(g.grp) + "</td>" + g.v.map(cell).join("") + "</tr>";
+    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="g">' + esc(g.grp) + "</td>" + g.v.map(cell).join("") + "</tr>";
   });
   html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td>' + tot.map(cell).join("") + "</tr></tfoot></table></div>";
   box.innerHTML = html;
