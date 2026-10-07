@@ -153,7 +153,7 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
         <h2>조립계획수립</h2>
         <p>조립 라인의 생산 계획을 세우고 진행 상황을 확인하는 화면입니다.</p>
       </div>
-      <span class="badge">내용 준비 중</span>
+      <span class="badge">엑셀 연동</span>
     </div>
   </section>
 
@@ -164,7 +164,7 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
         <h2>출고계획수립</h2>
         <p>완성품 출고 일정을 세우고 납기 대응 현황을 확인하는 화면입니다.</p>
       </div>
-      <span class="badge">내용 준비 중</span>
+      <span class="badge">엑셀 연동</span>
     </div>
   </section>
 
@@ -179,10 +179,10 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
     </div>
   </section>
 
-  <section class="sheet-panel" id="sheet-panel" hidden aria-label="가공 계획표">
+  <section class="sheet-panel" id="sheet-panel" hidden aria-label="계획표">
     <div class="sheet-top">
       <div>
-        <h3>가공 계획표</h3>
+        <h3 id="sheet-title">계획표</h3>
         <span class="sheet-status" id="sheet-status">Daily Plan 엑셀 파일을 넣으면 Plan 시트에서 필요한 열만 가져옵니다</span>
       </div>
       <div class="sheet-tools">
@@ -214,17 +214,13 @@ var SLOTS = {
     ["요약 지표", "계획 대비 실적 같은 핵심 숫자가 들어갈 자리", ""],
     ["요약 지표", "라인 가동, 인원 등", ""],
     ["요약 지표", "자재 결품·이슈 건수 등", ""],
-    ["조립 계획표", "라인·모델·일자별 계획이 들어갈 자리", "wide"],
-    ["라인별 현황", "라인 부하나 상태 목록", "tall"],
-    ["상세 목록", "작업지시 단위의 표가 들어갈 자리", "full"]
+    ["라인별 현황", "라인 부하나 상태 목록", "full"]
   ],
   shipping: [
     ["요약 지표", "오늘 출고 예정·완료 같은 핵심 숫자가 들어갈 자리", ""],
     ["요약 지표", "납기 준수율 등", ""],
     ["요약 지표", "지연·보류 건수 등", ""],
-    ["출고 일정표", "고객사·품번·일자별 출고 계획이 들어갈 자리", "wide"],
-    ["고객사별 현황", "납기 대응 상태 목록", "tall"],
-    ["상세 목록", "출고 건 단위의 표가 들어갈 자리", "full"]
+    ["고객사별 현황", "납기 대응 상태 목록", "full"]
   ],
   warehouse: [
     ["요약 지표", "총 재고, 적치율 같은 핵심 숫자가 들어갈 자리", ""],
@@ -235,16 +231,26 @@ var SLOTS = {
     ["상세 목록", "품목 단위의 재고 표가 들어갈 자리", "full"]
   ]
 };
-// ── 가공 계획표: Daily Plan 엑셀의 "Plan" 시트에서 정해진 열만 뽑아 보여 줍니다. ──
-// 가져오는 열: B, D, F, EY~FC, FJ~GU. 1~7행은 머리글(병합 포함) 그대로, 8행부터는 값이 있는 행만.
-// 원본은 수식이라 계산된 값을 가져옵니다. 가져온 내용은 이 브라우저에만 저장됩니다.
-var PLAN_KEY = "pl-plan-machining";
+// ── 계획표: Daily Plan 엑셀의 "Plan" 시트에서 섹션마다 정해진 열만 뽑아 보여 줍니다. ──
+// 세 섹션 모두 B, D, F 열은 고정이고, 그 뒤에 섹션별 열이 붙습니다. 파일 하나를 넣으면 세 섹션이 한꺼번에 채워집니다.
+// 4~7행은 머리글(병합 포함) 그대로, 8행부터는 값이 있는 행만. 원본은 수식이라 계산된 값을 가져옵니다.
+// 가져온 내용은 이 브라우저에만 저장됩니다.
 var PLAN_SHEET = "plan";
-var PLAN_RANGES = [["B", "B"], ["D", "D"], ["F", "F"], ["EY", "FC"], ["FJ", "GU"]];
-var HEAD_ROWS = 7;      // 엑셀 1~7행 = 머리글
+var FIXED_RANGES = [["B", "B"], ["D", "D"], ["F", "F"]];
+var PLAN_SECTIONS = {
+  machining: { title: "가공 계획표", ranges: [["EY", "FC"], ["FJ", "GU"]] },
+  assembly:  { title: "조립 계획표", ranges: [["HC", "IQ"]] },
+  shipping:  { title: "출고 계획표", ranges: [["IW", "KO"]] }
+};
+var HEAD_FIRST = 3;     // 머리글 시작 = 엑셀 4행 (0부터 세면 3)
+var HEAD_ROWS = 7;      // 머리글 끝 = 엑셀 7행, 8행부터 데이터
 var PIN = 3;            // 왼쪽 고정 열 수 (Model, Grp, P/No)
-var plan = null;        // { file, at, cols, w:[열 너비], rows:[엑셀 행 번호], head, hf:{"r:c":색}, merges, body, rf:[행 색], bf:{"r:c":색} }
-var PLAN_TEMPLATE = {"cols":["B","D","F","EY","EZ","FA","FB","FC","FJ","FK","FL","FM","FN","FO","FP","FQ","FR","FS","FT","FU","FV","FW","FX","FY","FZ","GA","GB","GC","GD","GE","GF","GG","GH","GI","GJ","GK","GL","GM","GN","GO","GP","GQ","GR","GS","GT","GU"],"w":[73,118,120,55,55,55,122,51,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48],"merges":[{"r":2,"c":6,"rs":2,"cs":1},{"r":2,"c":3,"rs":1,"cs":3},{"r":1,"c":3,"rs":1,"cs":5},{"r":1,"c":8,"rs":1,"cs":38},{"r":3,"c":4,"rs":2,"cs":1},{"r":3,"c":7,"rs":2,"cs":1},{"r":3,"c":3,"rs":2,"cs":1},{"r":1,"c":0,"rs":4,"cs":1},{"r":1,"c":1,"rs":4,"cs":1},{"r":1,"c":2,"rs":4,"cs":1}],"hf":{"1:3":"BDD7EE","1:4":"BDD7EE","1:5":"BDD7EE","1:6":"BDD7EE","1:7":"BDD7EE","1:8":"BDD7EE","1:9":"BDD7EE","1:10":"BDD7EE","1:11":"BDD7EE","1:12":"BDD7EE","1:13":"BDD7EE","1:14":"BDD7EE","1:15":"BDD7EE","1:16":"BDD7EE","1:17":"BDD7EE","1:18":"BDD7EE","1:19":"BDD7EE","1:20":"BDD7EE","1:21":"BDD7EE","1:22":"BDD7EE","1:23":"BDD7EE","1:24":"BDD7EE","1:25":"BDD7EE","1:26":"BDD7EE","1:27":"BDD7EE","1:28":"BDD7EE","1:29":"BDD7EE","1:30":"BDD7EE","1:31":"BDD7EE","1:32":"BDD7EE","1:33":"BDD7EE","1:34":"BDD7EE","1:35":"BDD7EE","1:36":"BDD7EE","1:37":"BDD7EE","1:38":"BDD7EE","1:39":"BDD7EE","1:40":"BDD7EE","1:41":"BDD7EE","1:42":"BDD7EE","1:43":"BDD7EE","1:44":"BDD7EE","1:45":"BDD7EE","2:3":"BDD7EE","2:4":"BDD7EE","2:5":"BDD7EE","2:6":"BDD7EE","2:7":"DEEBF7","2:8":"DEEBF7","2:9":"DEEBF7","2:10":"DEEBF7","2:11":"DEEBF7","2:12":"DEEBF7","2:13":"DEEBF7","2:14":"DEEBF7","2:15":"DEEBF7","2:16":"DEEBF7","2:17":"DEEBF7","2:18":"DEEBF7","2:19":"DEEBF7","2:20":"DEEBF7","2:21":"DEEBF7","2:22":"DEEBF7","2:23":"DEEBF7","2:24":"DEEBF7","2:25":"DEEBF7","2:26":"BDD7EE","2:27":"BDD7EE","2:28":"BDD7EE","2:29":"BDD7EE","2:30":"BDD7EE","2:31":"BDD7EE","2:32":"BDD7EE","2:33":"BDD7EE","2:34":"BDD7EE","2:35":"BDD7EE","2:36":"BDD7EE","2:37":"BDD7EE","2:38":"CCCCFF","2:39":"CCCCFF","2:40":"CCCCFF","2:41":"CCCCFF","2:42":"CCCCFF","2:43":"CCCCFF","2:44":"CCCCFF","2:45":"CCCCFF","3:3":"BDD7EE","3:4":"BDD7EE","3:5":"BDD7EE","3:6":"BDD7EE","3:7":"DEEBF7","3:8":"DEEBF7","3:9":"DEEBF7","3:10":"DEEBF7","3:11":"DEEBF7","3:12":"DEEBF7","3:13":"DEEBF7","3:14":"DEEBF7","3:15":"DEEBF7","3:16":"DEEBF7","3:17":"DEEBF7","3:18":"DEEBF7","3:19":"DEEBF7","3:20":"DEEBF7","3:21":"DEEBF7","3:22":"DEEBF7","3:23":"DEEBF7","3:24":"DEEBF7","3:25":"DEEBF7","3:26":"BDD7EE","3:27":"BDD7EE","3:28":"BDD7EE","3:29":"BDD7EE","3:30":"BDD7EE","3:31":"BDD7EE","3:32":"BDD7EE","3:33":"BDD7EE","3:34":"BDD7EE","3:35":"BDD7EE","3:36":"BDD7EE","3:37":"BDD7EE","3:38":"CCCCFF","3:39":"CCCCFF","3:40":"CCCCFF","3:41":"CCCCFF","3:42":"CCCCFF","3:43":"CCCCFF","3:44":"CCCCFF","3:45":"CCCCFF","4:3":"BDD7EE","4:4":"BDD7EE","4:5":"BDD7EE","4:6":"BDD7EE","4:7":"DEEBF7","4:8":"DEEBF7","4:9":"DEEBF7","4:10":"DEEBF7","4:11":"DEEBF7","4:12":"DEEBF7","4:13":"DEEBF7","4:14":"DEEBF7","4:15":"DEEBF7","4:16":"DEEBF7","4:17":"DEEBF7","4:18":"DEEBF7","4:19":"DEEBF7","4:20":"DEEBF7","4:21":"DEEBF7","4:22":"DEEBF7","4:23":"DEEBF7","4:24":"DEEBF7","4:25":"DEEBF7","4:26":"BDD7EE","4:27":"BDD7EE","4:28":"BDD7EE","4:29":"BDD7EE","4:30":"BDD7EE","4:31":"BDD7EE","4:32":"BDD7EE","4:33":"BDD7EE","4:34":"BDD7EE","4:35":"BDD7EE","4:36":"BDD7EE","4:37":"BDD7EE","4:38":"CCCCFF","4:39":"CCCCFF","4:40":"CCCCFF","4:41":"CCCCFF","4:42":"CCCCFF","4:43":"CCCCFF","4:44":"CCCCFF","4:45":"CCCCFF"},"body":[],"head":[["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["Model","Grp.\r\nName","P/No","Input Plan","","","","","Shortage considering the input plan","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","Input Qty.","","","Circuit","1st  R/W Plan","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","D+8","D+9","D+10","D+11","D+12","D+13","D+14","D+15","D+16","D+17","D+18","D+19","D+20","D+21","D+22","D+23","D+24","D+25","D+26","D+27","D+28","D+29","W+5","W+6","W+7","W+8","W+9","W+10","W+11","W+12"],["","","","Rank\r\n1","Rank\r\n5","","","Qty.","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","","","Total","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]]}; /*TEMPLATE*/
+var plans = {};         // 섹션별: { file, at, cols, w:[열 너비], rows:[엑셀 행 번호], head, hf:{"r:c":색}, merges, body, rf:[행 색], bf:{"r:c":색} }
+var cur = null;         // 지금 보고 있는 섹션
+var plan = null;        // plans[cur]
+var PLAN_TEMPLATES = {"machining":{"cols":["B","D","F","EY","EZ","FA","FB","FC","FJ","FK","FL","FM","FN","FO","FP","FQ","FR","FS","FT","FU","FV","FW","FX","FY","FZ","GA","GB","GC","GD","GE","GF","GG","GH","GI","GJ","GK","GL","GM","GN","GO","GP","GQ","GR","GS","GT","GU"],"w":[73,118,120,55,55,55,122,51,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48],"merges":[{"r":1,"c":6,"rs":2,"cs":1},{"r":1,"c":3,"rs":1,"cs":3},{"r":0,"c":3,"rs":1,"cs":5},{"r":0,"c":8,"rs":1,"cs":38},{"r":2,"c":4,"rs":2,"cs":1},{"r":2,"c":7,"rs":2,"cs":1},{"r":2,"c":3,"rs":2,"cs":1},{"r":0,"c":0,"rs":4,"cs":1},{"r":0,"c":1,"rs":4,"cs":1},{"r":0,"c":2,"rs":4,"cs":1}],"hf":{"0:3":"BDD7EE","0:4":"BDD7EE","0:5":"BDD7EE","0:6":"BDD7EE","0:7":"BDD7EE","0:8":"BDD7EE","0:9":"BDD7EE","0:10":"BDD7EE","0:11":"BDD7EE","0:12":"BDD7EE","0:13":"BDD7EE","0:14":"BDD7EE","0:15":"BDD7EE","0:16":"BDD7EE","0:17":"BDD7EE","0:18":"BDD7EE","0:19":"BDD7EE","0:20":"BDD7EE","0:21":"BDD7EE","0:22":"BDD7EE","0:23":"BDD7EE","0:24":"BDD7EE","0:25":"BDD7EE","0:26":"BDD7EE","0:27":"BDD7EE","0:28":"BDD7EE","0:29":"BDD7EE","0:30":"BDD7EE","0:31":"BDD7EE","0:32":"BDD7EE","0:33":"BDD7EE","0:34":"BDD7EE","0:35":"BDD7EE","0:36":"BDD7EE","0:37":"BDD7EE","0:38":"BDD7EE","0:39":"BDD7EE","0:40":"BDD7EE","0:41":"BDD7EE","0:42":"BDD7EE","0:43":"BDD7EE","0:44":"BDD7EE","0:45":"BDD7EE","1:3":"BDD7EE","1:4":"BDD7EE","1:5":"BDD7EE","1:6":"BDD7EE","1:7":"DEEBF7","1:8":"DEEBF7","1:9":"DEEBF7","1:10":"DEEBF7","1:11":"DEEBF7","1:12":"DEEBF7","1:13":"DEEBF7","1:14":"DEEBF7","1:15":"DEEBF7","1:16":"DEEBF7","1:17":"DEEBF7","1:18":"DEEBF7","1:19":"DEEBF7","1:20":"DEEBF7","1:21":"DEEBF7","1:22":"DEEBF7","1:23":"DEEBF7","1:24":"DEEBF7","1:25":"DEEBF7","1:26":"BDD7EE","1:27":"BDD7EE","1:28":"BDD7EE","1:29":"BDD7EE","1:30":"BDD7EE","1:31":"BDD7EE","1:32":"BDD7EE","1:33":"BDD7EE","1:34":"BDD7EE","1:35":"BDD7EE","1:36":"BDD7EE","1:37":"BDD7EE","1:38":"CCCCFF","1:39":"CCCCFF","1:40":"CCCCFF","1:41":"CCCCFF","1:42":"CCCCFF","1:43":"CCCCFF","1:44":"CCCCFF","1:45":"CCCCFF","2:3":"BDD7EE","2:4":"BDD7EE","2:5":"BDD7EE","2:6":"BDD7EE","2:7":"DEEBF7","2:8":"DEEBF7","2:9":"DEEBF7","2:10":"DEEBF7","2:11":"DEEBF7","2:12":"DEEBF7","2:13":"DEEBF7","2:14":"DEEBF7","2:15":"DEEBF7","2:16":"DEEBF7","2:17":"DEEBF7","2:18":"DEEBF7","2:19":"DEEBF7","2:20":"DEEBF7","2:21":"DEEBF7","2:22":"DEEBF7","2:23":"DEEBF7","2:24":"DEEBF7","2:25":"DEEBF7","2:26":"BDD7EE","2:27":"BDD7EE","2:28":"BDD7EE","2:29":"BDD7EE","2:30":"BDD7EE","2:31":"BDD7EE","2:32":"BDD7EE","2:33":"BDD7EE","2:34":"BDD7EE","2:35":"BDD7EE","2:36":"BDD7EE","2:37":"BDD7EE","2:38":"CCCCFF","2:39":"CCCCFF","2:40":"CCCCFF","2:41":"CCCCFF","2:42":"CCCCFF","2:43":"CCCCFF","2:44":"CCCCFF","2:45":"CCCCFF","3:3":"BDD7EE","3:4":"BDD7EE","3:5":"BDD7EE","3:6":"BDD7EE","3:7":"DEEBF7","3:8":"DEEBF7","3:9":"DEEBF7","3:10":"DEEBF7","3:11":"DEEBF7","3:12":"DEEBF7","3:13":"DEEBF7","3:14":"DEEBF7","3:15":"DEEBF7","3:16":"DEEBF7","3:17":"DEEBF7","3:18":"DEEBF7","3:19":"DEEBF7","3:20":"DEEBF7","3:21":"DEEBF7","3:22":"DEEBF7","3:23":"DEEBF7","3:24":"DEEBF7","3:25":"DEEBF7","3:26":"BDD7EE","3:27":"BDD7EE","3:28":"BDD7EE","3:29":"BDD7EE","3:30":"BDD7EE","3:31":"BDD7EE","3:32":"BDD7EE","3:33":"BDD7EE","3:34":"BDD7EE","3:35":"BDD7EE","3:36":"BDD7EE","3:37":"BDD7EE","3:38":"CCCCFF","3:39":"CCCCFF","3:40":"CCCCFF","3:41":"CCCCFF","3:42":"CCCCFF","3:43":"CCCCFF","3:44":"CCCCFF","3:45":"CCCCFF"},"body":[],"head":[["Model","Grp.\r\nName","P/No","Input Plan","","","","","Shortage considering the input plan","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","Input Qty.","","","Circuit","1st  R/W Plan","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","D+8","D+9","D+10","D+11","D+12","D+13","D+14","D+15","D+16","D+17","D+18","D+19","D+20","D+21","D+22","D+23","D+24","D+25","D+26","D+27","D+28","D+29","W+5","W+6","W+7","W+8","W+9","W+10","W+11","W+12"],["","","","Rank\r\n1","Rank\r\n5","","","Qty.","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","","","Total","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]]},"assembly":{"cols":["B","D","F","HC","HD","HE","HF","HG","HH","HI","HJ","HK","HL","HM","HN","HO","HP","HQ","HR","HS","HT","HU","HV","HW","HX","HY","HZ","IA","IB","IC","ID","IE","IF","IG","IH","II","IJ","IK","IL","IM","IN","IO","IP","IQ"],"w":[73,118,120,48,48,48,48,48,48,48,48,48,48,49,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48],"merges":[{"r":0,"c":3,"rs":1,"cs":10},{"r":1,"c":12,"rs":3,"cs":1},{"r":0,"c":13,"rs":1,"cs":31},{"r":1,"c":43,"rs":3,"cs":1},{"r":0,"c":0,"rs":4,"cs":1},{"r":0,"c":1,"rs":4,"cs":1},{"r":0,"c":2,"rs":4,"cs":1}],"hf":{"0:3":"F8CBAD","0:4":"F8CBAD","0:5":"F8CBAD","0:6":"F8CBAD","0:7":"F8CBAD","0:8":"F8CBAD","0:9":"F8CBAD","0:10":"F8CBAD","0:11":"F8CBAD","0:12":"F8CBAD","0:13":"F8CBAD","0:14":"F8CBAD","0:15":"F8CBAD","0:16":"F8CBAD","0:17":"F8CBAD","0:18":"F8CBAD","0:19":"F8CBAD","0:20":"F8CBAD","0:21":"F8CBAD","0:22":"F8CBAD","0:23":"F8CBAD","0:24":"F8CBAD","0:25":"F8CBAD","0:26":"F8CBAD","0:27":"F8CBAD","0:28":"F8CBAD","0:29":"F8CBAD","0:30":"F8CBAD","0:31":"F8CBAD","0:32":"F8CBAD","0:33":"F8CBAD","0:34":"F8CBAD","0:35":"F8CBAD","0:36":"F8CBAD","0:37":"F8CBAD","0:38":"F8CBAD","0:39":"F8CBAD","0:40":"F8CBAD","0:41":"F8CBAD","0:42":"F8CBAD","0:43":"F8CBAD","1:3":"FFFF00","1:4":"F8CBAD","1:5":"F8CBAD","1:6":"F8CBAD","1:7":"F8CBAD","1:8":"F8CBAD","1:9":"F8CBAD","1:10":"F8CBAD","1:11":"F8CBAD","1:12":"F8CBAD","1:13":"FBE5D6","1:14":"FBE5D6","1:15":"FBE5D6","1:16":"FBE5D6","1:17":"FBE5D6","1:18":"FBE5D6","1:19":"FBE5D6","1:20":"FBE5D6","1:21":"FBE5D6","1:22":"FBE5D6","1:23":"FBE5D6","1:24":"F8CBAD","1:25":"F8CBAD","1:26":"F8CBAD","1:27":"F8CBAD","1:28":"F8CBAD","1:29":"F8CBAD","1:30":"F8CBAD","1:31":"F8CBAD","1:32":"F8CBAD","1:33":"F8CBAD","1:34":"F8CBAD","1:35":"F8CBAD","1:36":"F8CBAD","1:37":"F8CBAD","1:38":"F8CBAD","1:39":"F8CBAD","1:40":"F8CBAD","1:41":"F8CBAD","1:42":"F8CBAD","1:43":"F8CBAD","2:3":"FFFF00","2:4":"F8CBAD","2:5":"F8CBAD","2:6":"F8CBAD","2:7":"F8CBAD","2:8":"F8CBAD","2:9":"F8CBAD","2:10":"F8CBAD","2:11":"F8CBAD","2:12":"F8CBAD","2:13":"FBE5D6","2:14":"FBE5D6","2:15":"FBE5D6","2:16":"FBE5D6","2:17":"FBE5D6","2:18":"FBE5D6","2:19":"FBE5D6","2:20":"FBE5D6","2:21":"FBE5D6","2:22":"FBE5D6","2:23":"FBE5D6","2:24":"F8CBAD","2:25":"F8CBAD","2:26":"F8CBAD","2:27":"F8CBAD","2:28":"F8CBAD","2:29":"F8CBAD","2:30":"F8CBAD","2:31":"F8CBAD","2:32":"F8CBAD","2:33":"F8CBAD","2:34":"F8CBAD","2:35":"F8CBAD","2:36":"F8CBAD","2:37":"F8CBAD","2:38":"F8CBAD","2:39":"F8CBAD","2:40":"F8CBAD","2:41":"F8CBAD","2:42":"F8CBAD","2:43":"F8CBAD","3:3":"FFFF00","3:4":"F8CBAD","3:5":"F8CBAD","3:6":"F8CBAD","3:7":"F8CBAD","3:8":"F8CBAD","3:9":"F8CBAD","3:10":"F8CBAD","3:11":"F8CBAD","3:12":"F8CBAD","3:13":"FBE5D6","3:14":"FBE5D6","3:15":"FBE5D6","3:16":"FBE5D6","3:17":"FBE5D6","3:18":"FBE5D6","3:19":"FBE5D6","3:20":"FBE5D6","3:21":"FBE5D6","3:22":"FBE5D6","3:23":"FBE5D6","3:24":"F8CBAD","3:25":"F8CBAD","3:26":"F8CBAD","3:27":"F8CBAD","3:28":"F8CBAD","3:29":"F8CBAD","3:30":"F8CBAD","3:31":"F8CBAD","3:32":"F8CBAD","3:33":"F8CBAD","3:34":"F8CBAD","3:35":"F8CBAD","3:36":"F8CBAD","3:37":"F8CBAD","3:38":"F8CBAD","3:39":"F8CBAD","3:40":"F8CBAD","3:41":"F8CBAD","3:42":"F8CBAD","3:43":"F8CBAD"},"body":[],"head":[["Model","Grp.\r\nName","P/No","Assembly Line → Lajat","","","","","","","","","","Shortage considering the assembly plan","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","D+0","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","Tot.","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","D+8","D+9","D+10","D+11","D+12","D+13","D+14","D+15","D+16","D+17","D+18","D+19","D+20","D+21","D+22","D+23","D+24","D+25","D+26","D+27","D+28","D+29","REM"],["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","Must","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]]},"shipping":{"cols":["B","D","F","IW","IX","IY","IZ","JA","JB","JC","JD","JE","JF","JG","JH","JI","JJ","JK","JL","JM","JN","JO","JP","JQ","JR","JS","JT","JU","JV","JW","JX","JY","JZ","KA","KB","KC","KD","KE","KF","KG","KH","KI","KJ","KK","KL","KM","KN","KO"],"w":[73,118,120,48,60,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48],"merges":[{"r":1,"c":9,"rs":3,"cs":1},{"r":1,"c":47,"rs":3,"cs":1},{"r":0,"c":3,"rs":1,"cs":7},{"r":0,"c":17,"rs":1,"cs":31},{"r":1,"c":10,"rs":3,"cs":1},{"r":0,"c":10,"rs":1,"cs":7},{"r":1,"c":16,"rs":3,"cs":1},{"r":0,"c":0,"rs":4,"cs":1},{"r":0,"c":1,"rs":4,"cs":1},{"r":0,"c":2,"rs":4,"cs":1}],"hf":{"0:3":"FFE699","0:4":"FFE699","0:5":"FFE699","0:6":"FFE699","0:7":"FFE699","0:8":"FFE699","0:9":"FFE699","0:10":"FFE699","0:11":"FFE699","0:12":"FFE699","0:13":"FFE699","0:14":"FFE699","0:15":"FFE699","0:16":"FFE699","0:17":"FFE699","0:18":"FFE699","0:19":"FFE699","0:20":"FFE699","0:21":"FFE699","0:22":"FFE699","0:23":"FFE699","0:24":"FFE699","0:25":"FFE699","0:26":"FFE699","0:27":"FFE699","0:28":"FFE699","0:29":"FFE699","0:30":"FFE699","0:31":"FFE699","0:32":"FFE699","0:33":"FFE699","0:34":"FFE699","0:35":"FFE699","0:36":"FFE699","0:37":"FFE699","0:38":"FFE699","0:39":"FFE699","0:40":"FFE699","0:41":"FFE699","0:42":"FFE699","0:43":"FFE699","0:44":"FFE699","0:45":"FFE699","0:46":"FFE699","0:47":"FFE699","1:3":"FFFF00","1:4":"FFE699","1:5":"FFE699","1:6":"FFE699","1:7":"FFE699","1:8":"FFE699","1:9":"FFE699","1:10":"FFE699","1:11":"FFE699","1:12":"FFE699","1:13":"FFE699","1:14":"FFE699","1:15":"FFE699","1:16":"FFE699","1:17":"FFF2CC","1:18":"FFF2CC","1:19":"FFF2CC","1:20":"FFF2CC","1:21":"FFF2CC","1:22":"FFF2CC","1:23":"FFF2CC","1:24":"FFF2CC","1:25":"FFE699","1:26":"FFE699","1:27":"FFE699","1:28":"FFE699","1:29":"FFE699","1:30":"FFE699","1:31":"FFE699","1:32":"FFE699","1:33":"FFE699","1:34":"FFE699","1:35":"FFE699","1:36":"FFE699","1:37":"FFE699","1:38":"FFE699","1:39":"FFE699","1:40":"FFE699","1:41":"FFE699","1:42":"FFE699","1:43":"FFE699","1:44":"FFE699","1:45":"FFE699","1:46":"FFE699","1:47":"FFE699","2:3":"FFFF00","2:4":"FFE699","2:5":"FFE699","2:6":"FFE699","2:7":"FFE699","2:8":"FFE699","2:9":"FFE699","2:10":"FFE699","2:11":"FFE699","2:12":"FFE699","2:13":"FFE699","2:14":"FFE699","2:15":"FFE699","2:16":"FFE699","2:17":"FFF2CC","2:18":"FFF2CC","2:19":"FFF2CC","2:20":"FFF2CC","2:21":"FFF2CC","2:22":"FFF2CC","2:23":"FFF2CC","2:24":"FFF2CC","2:25":"FFE699","2:26":"FFE699","2:27":"FFE699","2:28":"FFE699","2:29":"FFE699","2:30":"FFE699","2:31":"FFE699","2:32":"FFE699","2:33":"FFE699","2:34":"FFE699","2:35":"FFE699","2:36":"FFE699","2:37":"FFE699","2:38":"FFE699","2:39":"FFE699","2:40":"FFE699","2:41":"FFE699","2:42":"FFE699","2:43":"FFE699","2:44":"FFE699","2:45":"FFE699","2:46":"FFE699","2:47":"FFE699","3:3":"FFFF00","3:4":"FFE699","3:5":"FFE699","3:6":"FFE699","3:7":"FFE699","3:8":"FFE699","3:9":"FFE699","3:10":"FFE699","3:11":"FFE699","3:12":"FFE699","3:13":"FFE699","3:14":"FFE699","3:15":"FFE699","3:16":"FFE699","3:17":"FFF2CC","3:18":"FFF2CC","3:19":"FFF2CC","3:20":"FFF2CC","3:21":"FFF2CC","3:22":"FFF2CC","3:23":"FFF2CC","3:24":"FFF2CC","3:25":"FFE699","3:26":"FFE699","3:27":"FFE699","3:28":"FFE699","3:29":"FFE699","3:30":"FFE699","3:31":"FFE699","3:32":"FFE699","3:33":"FFE699","3:34":"FFE699","3:35":"FFE699","3:36":"FFE699","3:37":"FFE699","3:38":"FFE699","3:39":"FFE699","3:40":"FFE699","3:41":"FFE699","3:42":"FFE699","3:43":"FFE699","3:44":"FFE699","3:45":"FFE699","3:46":"FFE699","3:47":"FFE699"},"body":[],"head":[["Model","Grp.\r\nName","P/No","Lajat → Savannah","","","","","","","Box Qty.","","","","","","","Shortage considering the delivery plan","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","D+0","D+0","D+1","D+2","D+3","D+4","Tot.","Qty.\r\nper\r\n1 Box","D+0","D+1","D+2","D+3","D+4","Tot.","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","D+8","D+9","D+10","D+11","D+12","D+13","D+14","D+15","D+16","D+17","D+18","D+19","D+20","D+21","D+22","D+23","D+24","D+25","D+26","D+27","D+28","D+29","REM"],["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","Must","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]]}}; /*TEMPLATE*/
+var PLAN_TEMPLATE = null;
+function planKey(sec) { return "pl-plan2-" + sec; }
 var host = document.getElementById("sheet-host");
 var statusEl = document.getElementById("sheet-status");
 var searchEl = document.getElementById("sh-search");
@@ -255,9 +261,9 @@ function esc(v) { return String(v).replace(/[&<>"]/g, function (c) { return { "&
 function txt(c) { return Array.isArray(c) ? c[0] : c; }
 function num(c) { return Array.isArray(c) ? c[1] : null; }
 
-function planCols() {
+function planCols(ranges) {
   var out = [];
-  PLAN_RANGES.forEach(function (r) {
+  FIXED_RANGES.concat(ranges).forEach(function (r) {
     for (var c = XLSX.utils.decode_col(r[0]); c <= XLSX.utils.decode_col(r[1]); c++) out.push(c);
   });
   return out;
@@ -272,30 +278,27 @@ function readFill(ws, r, c) {
   var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })], s = cell && cell.s;
   return s && s.patternType === "solid" && s.fgColor && s.fgColor.rgb ? String(s.fgColor.rgb).slice(-6) : "";
 }
-function extractPlan(ws, fileName) {
-  var cols = planCols(), pos = {};
+function extractPlan(ws, fileName, ranges) {
+  var cols = planCols(ranges), pos = {};
   cols.forEach(function (c, i) { pos[c] = i; });
   var last = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]).e.r : 0;
   function row(r) { return cols.map(function (c) { return readCell(ws, r, c); }); }
   function filled(cells) { return cells.some(function (c) { return txt(c) !== ""; }); }
 
-  // 머리글: 1~7행 중 가져오는 열에 값이 하나라도 있는 행
+  // 머리글: 4~7행 그대로
   var head = [], headRow = {}, hf = {}, r;
-  for (r = 0; r < HEAD_ROWS; r++) {
-    var cells = row(r);
-    if (filled(cells) || head.length) {
-      headRow[r] = head.length; head.push(cells);
-      cols.forEach(function (c, i) { var f = readFill(ws, r, c); if (f) hf[headRow[r] + ":" + i] = f; });
-    }
+  for (r = HEAD_FIRST; r < HEAD_ROWS; r++) {
+    headRow[r] = head.length; head.push(row(r));
+    cols.forEach(function (c, i) { var f = readFill(ws, r, c); if (f) hf[headRow[r] + ":" + i] = f; });
   }
   // 병합: 머리글 구역의 병합을 가져오는 열 기준으로 다시 계산
   var merges = [];
   (ws["!merges"] || []).forEach(function (m) {
-    if (m.s.r >= HEAD_ROWS) return;
+    if (m.s.r >= HEAD_ROWS || m.e.r < HEAD_FIRST) return;
     var first = -1, n = 0;
     for (var c = m.s.c; c <= m.e.c; c++) if (pos[c] != null) { if (first < 0) first = pos[c]; n++; }
     var r0 = -1, rn = 0;
-    for (var rr = m.s.r; rr <= Math.min(m.e.r, HEAD_ROWS - 1); rr++) if (headRow[rr] != null) { if (r0 < 0) r0 = headRow[rr]; rn++; }
+    for (var rr = Math.max(m.s.r, HEAD_FIRST); rr <= Math.min(m.e.r, HEAD_ROWS - 1); rr++) if (headRow[rr] != null) { if (r0 < 0) r0 = headRow[rr]; rn++; }
     if (first < 0 || r0 < 0 || (n === 1 && rn === 1)) return;
     // 병합의 값은 원본 왼쪽 위 칸에 있습니다 (그 칸이 가져오지 않는 열일 수도 있음).
     var v = readCell(ws, m.s.r, m.s.c);
@@ -379,10 +382,22 @@ function renderPlan() {
   var when = new Date(plan.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   setStatus(plan.file + " · " + (q ? shown + " / " : "") + plan.body.length + "행 · " + n + "열 · 불러온 시각 " + when);
 }
-function initSheet() {
-  if (plan || host.firstChild) return;
-  try { plan = JSON.parse(localStorage.getItem(PLAN_KEY) || "null"); } catch (e) { plan = null; }
-  if (plan && !(plan.head && plan.body && plan.cols)) plan = null;
+function loadStored(sec) {
+  if (sec in plans) return;
+  var d = null;
+  try { d = JSON.parse(localStorage.getItem(planKey(sec)) || "null"); } catch (e) {}
+  plans[sec] = d && d.head && d.body && d.cols ? d : null;
+}
+// 섹션을 바꿀 때마다 불립니다.
+function initSheet(sec) {
+  cur = sec;
+  loadStored(sec);
+  plan = plans[sec];
+  PLAN_TEMPLATE = PLAN_TEMPLATES[sec] || null;
+  document.getElementById("sheet-title").textContent = PLAN_SECTIONS[sec].title;
+  panelEl.setAttribute("aria-label", PLAN_SECTIONS[sec].title);
+  searchEl.value = "";
+  if (!plan) setStatus("Daily Plan 엑셀 파일을 넣으면 Plan 시트에서 필요한 열만 가져옵니다 (가공·조립·출고 한꺼번에)");
   renderPlan();
 }
 
@@ -399,13 +414,21 @@ function loadFile(file) {
         var name = names.filter(function (s) { return s.trim().toLowerCase() === PLAN_SHEET; })[0];
         if (!name) { setStatus("이 파일에는 Plan 시트가 없습니다 (있는 시트: " + names.join(", ") + ")"); return; }
         var ws = XLSX.read(fr.result, { type: "array", sheets: name, cellStyles: true }).Sheets[name];
-        var next = extractPlan(ws, file.name);
-        if (!next.body.length) { setStatus("Plan 시트 8행 아래에 가져올 데이터가 없습니다: " + file.name); return; }
-        plan = next;
+        var next = {}, empty = true;
+        Object.keys(PLAN_SECTIONS).forEach(function (sec) {
+          next[sec] = extractPlan(ws, file.name, PLAN_SECTIONS[sec].ranges);
+          if (next[sec].body.length) empty = false;
+        });
+        if (empty) { setStatus("Plan 시트 8행 아래에 가져올 데이터가 없습니다: " + file.name); return; }
+        plans = next;
+        plan = plans[cur];
         searchEl.value = "";
         renderPlan();
-        try { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }
-        catch (e) { setStatus(statusEl.textContent + " · 브라우저 저장 실패(새로고침하면 사라짐)"); }
+        var saved = true;
+        Object.keys(plans).forEach(function (sec) {
+          try { localStorage.setItem(planKey(sec), JSON.stringify(plans[sec])); } catch (e) { saved = false; }
+        });
+        if (!saved) setStatus(statusEl.textContent + " · 브라우저 저장 실패(새로고침하면 사라짐)");
       } catch (e) {
         setStatus("파일을 읽지 못했습니다: " + file.name);
       }
@@ -423,18 +446,22 @@ function exportXlsx() {
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Plan");
   var d = new Date(), p = function (x) { return (x < 10 ? "0" : "") + x; };
-  XLSX.writeFile(wb, "가공계획_" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + ".xlsx");
+  XLSX.writeFile(wb, PLAN_SECTIONS[cur].title.replace(/\s/g, "") + "_" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + ".xlsx");
 }
 
+try { localStorage.removeItem("pl-plan-machining"); localStorage.removeItem("pl-sheet-machining"); } catch (e) {}
 var fileInput = document.getElementById("sh-file");
 var panelEl = document.getElementById("sheet-panel");
 document.getElementById("sh-import").addEventListener("click", function () { fileInput.value = ""; fileInput.click(); });
 fileInput.addEventListener("change", function () { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
 document.getElementById("sh-export").addEventListener("click", exportXlsx);
 document.getElementById("sh-clear").addEventListener("click", function () {
-  if (!plan || !confirm("불러온 계획표를 화면에서 지웁니다. 원본 엑셀 파일은 그대로입니다. 계속할까요?")) return;
+  if (!plan || !confirm("가공·조립·출고 계획표를 모두 화면에서 지웁니다. 원본 엑셀 파일은 그대로입니다. 계속할까요?")) return;
+  Object.keys(PLAN_SECTIONS).forEach(function (sec) {
+    plans[sec] = null;
+    try { localStorage.removeItem(planKey(sec)); } catch (e) {}
+  });
   plan = null;
-  try { localStorage.removeItem(PLAN_KEY); localStorage.removeItem("pl-sheet-machining"); } catch (e) {}
   renderPlan();
   setStatus("비웠습니다. 엑셀 파일을 다시 넣어 주세요.");
 });
@@ -465,8 +492,8 @@ function show(sec) {
     if (on && t.scrollIntoView) t.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   var sp = document.getElementById("sheet-panel");
-  sp.hidden = sec !== "machining";
-  if (sec === "machining") initSheet();
+  sp.hidden = !PLAN_SECTIONS[sec];
+  if (PLAN_SECTIONS[sec]) initSheet(sec);
   grid.innerHTML = "";
   SLOTS[sec].forEach(function (s) {
     var d = document.createElement("div");
