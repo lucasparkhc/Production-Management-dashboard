@@ -89,6 +89,8 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .plan td.num { text-align: right; }
 .plan thead th.wk { color: #e00000; }
 .sum-table thead th.wk { color: #e5484d; }
+.plan thead th.sa { color: #0046d5; }
+.sum-table thead th.sa { color: #5b9dff; }
 .plan td.neg { background: #ffc7ce !important; color: #9c0006; }
 .plan .pin { position: sticky; z-index: 1; }
 .plan thead .pin { z-index: 4; }
@@ -389,7 +391,7 @@ function renderSummary() {
   var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
   var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
   var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="g">Grp. Name</th>';
-  cols.forEach(function (c) { html += "<th" + (/(^|\n)(sat|sun)$/i.test(c.label) ? ' class="wk"' : "") + ">" + esc(c.label) + "</th>"; });
+  cols.forEach(function (c) { html += "<th" + (/(^|\n)sat$/i.test(c.label) ? ' class="sa"' : /(^|\n)sun$/i.test(c.label) ? ' class="wk"' : "") + ">" + esc(c.label) + "</th>"; });
   html += "</tr></thead><tbody>";
   groups.forEach(function (g) {
     html += '<tr><td class="k">' + esc(g.model) + '</td><td class="g">' + esc(g.grp) + "</td>" + g.v.map(cell).join("") + "</tr>";
@@ -454,15 +456,15 @@ function renderPlan() {
     span[m.r + ":" + m.c] = m;
     for (var a = 0; a < m.rs; a++) for (var b = 0; b < m.cs; b++) if (a || b) covered[(m.r + a) + ":" + (m.c + b)] = 1;
   });
-  // 주말(Sat, Sun) 열은 머리글의 D+n · 날짜 · 요일 칸을 빨간 글씨로.
+  // 주말 열은 머리글의 D+n · 날짜 · 요일 칸 글씨 색을 바꿉니다: Sat 파랑, Sun 빨강.
   var wk = {};
-  P.head.forEach(function (row) { row.forEach(function (x, c) { if (/^(sat|sun)$/i.test(String(txt(x)).trim())) wk[c] = 1; }); });
+  P.head.forEach(function (row) { row.forEach(function (x, c) { var d = String(txt(x)).trim().toLowerCase(); if (d === "sat") wk[c] = " sa"; else if (d === "sun") wk[c] = " wk"; }); });
   for (r = 0; r < h; r++) {
     html += "<tr>";
     for (c = 0; c < n; c++) {
       if (covered[r + ":" + c]) continue;
       var m = span[r + ":" + c] || { rs: 1, cs: 1 }, a = attrs(c, m.cs, hf[r + ":" + c]), v = txt(P.head[r][c]);
-      html += '<th class="' + (a[0] + (m.cs === 1 && wk[c] ? " wk" : "")).trim() + '"' + a[1] +
+      html += '<th class="' + (a[0] + (m.cs === 1 && wk[c] ? wk[c] : "")).trim() + '"' + a[1] +
         (m.rs > 1 ? ' rowspan="' + m.rs + '"' : "") + (m.cs > 1 ? ' colspan="' + m.cs + '"' : "") + ">" + esc(v) + "</th>";
     }
     html += "</tr>";
