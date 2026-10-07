@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Production Management & Logistic</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsuites@4.17.7/dist/jsuites.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4.13.4/dist/jspreadsheet.css">
 <style>
 /* Layout: sticky header with a two-group tab rail (생산관리 ×3 | 물류 ×1); one section panel visible at a time, each a grid of empty slots. */
 :root {
@@ -68,35 +66,34 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .slot h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .slot p { margin: 0; font-size: 13px; color: var(--muted); }
 .slot .tag { margin-top: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
-/* ── 편집 시트 ── */
+/* ── 가공 계획표 (Daily Plan 파일의 Plan 시트에서 가져온 표) ── */
 .sheet-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sheet-panel.drag { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .sheet-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .sheet-top h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.sheet-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.sheet-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .btn { appearance: none; font: inherit; font-size: 13px; font-weight: 500; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn:focus-visible, .sheet-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
 .btn.primary:hover { color: var(--surface); filter: brightness(1.08); }
+.sheet-search { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; width: 190px; max-width: 100%; }
 .sheet-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
-.sheet-host { min-width: 0; overflow: hidden; }
-.sheet-host .jexcel_content { border: 1px solid var(--line); border-radius: 4px; box-shadow: none; padding: 0; }
-.sheet-host .jexcel { font-family: var(--font-ui); font-size: 13px; border-color: var(--line); }
-.sheet-host .jexcel > thead > tr > td,
-.sheet-host .jexcel > tbody > tr > td:first-child { background: var(--slot); color: var(--muted); border-color: var(--line); font-family: var(--font-mono); font-size: 11px; }
-.sheet-host .jexcel > thead > tr > td.selected,
-.sheet-host .jexcel > tbody > tr.selected > td:first-child { background: var(--accent-soft); color: var(--accent); }
-.sheet-host .jexcel > tbody > tr > td { background: var(--surface); color: var(--fg); border-color: var(--line); }
-.sheet-host .jexcel > tbody > tr > td.highlight { background: var(--accent-soft); }
-.sheet-host .jexcel .highlight-top { border-top-color: var(--accent); }
-.sheet-host .jexcel .highlight-bottom { border-bottom-color: var(--accent); }
-.sheet-host .jexcel .highlight-left { border-left-color: var(--accent); }
-.sheet-host .jexcel .highlight-right { border-right-color: var(--accent); }
-.sheet-host .jexcel > tbody > tr > td.editor > input { background: var(--surface); color: var(--fg); font: inherit; }
-.sheet-host .jexcel_corner { background: var(--accent); border-color: var(--surface); }
-.jcontextmenu { background: var(--surface); color: var(--fg); border-color: var(--line); font-family: var(--font-ui); }
-.jcontextmenu > div:hover { background: var(--accent-soft); }
-.jcontextmenu hr { border-color: var(--line); }
+.plan-scroll { overflow: auto; max-height: 72vh; border: 1px solid #9aa0a6; border-radius: 2px; background: #fff; }
+/* 표 안쪽은 엑셀 화면을 그대로 따릅니다: 흰 바탕, 검은 글자, 채우기 색은 파일에서 읽은 값. */
+.plan { border-collapse: separate; border-spacing: 0; table-layout: fixed; font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; font-size: 12px; color: #000; font-variant-numeric: tabular-nums; }
+.plan th, .plan td { border-right: 1px solid #c8ccd0; border-bottom: 1px solid #c8ccd0; padding: 2px 3px; text-align: center; white-space: nowrap; overflow: hidden; background: #fff; color: #000; height: 22px; }
+.plan thead { position: sticky; top: 0; z-index: 3; }
+.plan thead th { font-weight: 700; white-space: pre-line; line-height: 1.2; border-color: #7f8790; }
+.plan thead tr:last-child th { border-bottom: 2px solid #5f6770; }
+.plan td.num { text-align: right; }
+.plan td.neg { background: #ffc7ce !important; color: #9c0006; }
+.plan .pin { position: sticky; z-index: 1; }
+.plan thead .pin { z-index: 4; }
+.plan .pin-last { border-right: 2px solid #5f6770; }
+.plan tr.sum td { font-weight: 700; }
+.plan tbody tr:hover td { box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.06); }
+.plan td.hint { text-align: left; color: #5f6770; padding: 14px 12px; font-size: 13px; height: auto; }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
   .slot.wide { grid-column: 1 / -1; }
@@ -145,7 +142,7 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
         <h2>가공계획수립</h2>
         <p>가공 공정의 생산 계획을 세우고 진행 상황을 확인하는 화면입니다.</p>
       </div>
-      <span class="badge">시트 사용 가능</span>
+      <span class="badge">엑셀 연동</span>
     </div>
   </section>
 
@@ -182,30 +179,27 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
     </div>
   </section>
 
-  <section class="sheet-panel" id="sheet-panel" hidden aria-label="가공 계획 시트">
+  <section class="sheet-panel" id="sheet-panel" hidden aria-label="가공 계획표">
     <div class="sheet-top">
       <div>
-        <h3>가공 계획 시트</h3>
-        <span class="sheet-status" id="sheet-status">셀을 클릭해 입력하세요</span>
+        <h3>가공 계획표</h3>
+        <span class="sheet-status" id="sheet-status">Daily Plan 엑셀 파일을 넣으면 Plan 시트에서 필요한 열만 가져옵니다</span>
       </div>
       <div class="sheet-tools">
-        <button class="btn" id="sh-import" type="button">엑셀 불러오기</button>
-        <button class="btn primary" id="sh-export" type="button">엑셀로 내보내기</button>
-        <button class="btn" id="sh-row" type="button">행 추가</button>
-        <button class="btn" id="sh-col" type="button">열 추가</button>
-        <button class="btn" id="sh-clear" type="button">전체 비우기</button>
-        <input type="file" id="sh-file" accept=".xlsx,.xls,.csv" hidden>
+        <input class="sheet-search" id="sh-search" type="search" placeholder="Model · Grp · P/No 검색" aria-label="행 검색">
+        <button class="btn primary" id="sh-import" type="button">엑셀 파일 넣기</button>
+        <button class="btn" id="sh-export" type="button">엑셀로 내보내기</button>
+        <button class="btn" id="sh-clear" type="button">비우기</button>
+        <input type="file" id="sh-file" accept=".xlsx,.xlsm,.xls" hidden>
       </div>
     </div>
-    <div class="sheet-host" id="sheet-host"></div>
+    <div id="sheet-host"></div>
   </section>
 
   <div class="grid" id="grid"></div>
 </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/jsuites@4.17.7/dist/jsuites.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4.13.4/dist/index.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // 섹션별 빈 자리. 실제 내용이 정해지면 이 자리를 채웁니다.
@@ -241,171 +235,220 @@ var SLOTS = {
     ["상세 목록", "품목 단위의 재고 표가 들어갈 자리", "full"]
   ]
 };
-// ── 가공 계획 시트: 편집 가능한 격자 + 엑셀 불러오기/내보내기. 값은 이 브라우저에 자동 저장됩니다. ──
-var SHEET_KEY = "pl-sheet-machining";
-var MIN_COLS = 12, MIN_ROWS = 30;
-var sheet = null, saveTimer = null;
+// ── 가공 계획표: Daily Plan 엑셀의 "Plan" 시트에서 정해진 열만 뽑아 보여 줍니다. ──
+// 가져오는 열: B, D, F, EY~FC, FJ~GU. 1~7행은 머리글(병합 포함) 그대로, 8행부터는 값이 있는 행만.
+// 원본은 수식이라 계산된 값을 가져옵니다. 가져온 내용은 이 브라우저에만 저장됩니다.
+var PLAN_KEY = "pl-plan-machining";
+var PLAN_SHEET = "plan";
+var PLAN_RANGES = [["B", "B"], ["D", "D"], ["F", "F"], ["EY", "FC"], ["FJ", "GU"]];
+var HEAD_ROWS = 7;      // 엑셀 1~7행 = 머리글
+var PIN = 3;            // 왼쪽 고정 열 수 (Model, Grp, P/No)
+var plan = null;        // { file, at, cols, w:[열 너비], rows:[엑셀 행 번호], head, hf:{"r:c":색}, merges, body, rf:[행 색], bf:{"r:c":색} }
+var PLAN_TEMPLATE = {"cols":["B","D","F","EY","EZ","FA","FB","FC","FJ","FK","FL","FM","FN","FO","FP","FQ","FR","FS","FT","FU","FV","FW","FX","FY","FZ","GA","GB","GC","GD","GE","GF","GG","GH","GI","GJ","GK","GL","GM","GN","GO","GP","GQ","GR","GS","GT","GU"],"w":[73,118,120,55,55,55,122,51,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48],"merges":[{"r":2,"c":6,"rs":2,"cs":1},{"r":2,"c":3,"rs":1,"cs":3},{"r":1,"c":3,"rs":1,"cs":5},{"r":1,"c":8,"rs":1,"cs":38},{"r":3,"c":4,"rs":2,"cs":1},{"r":3,"c":7,"rs":2,"cs":1},{"r":3,"c":3,"rs":2,"cs":1},{"r":1,"c":0,"rs":4,"cs":1},{"r":1,"c":1,"rs":4,"cs":1},{"r":1,"c":2,"rs":4,"cs":1}],"hf":{"1:3":"BDD7EE","1:4":"BDD7EE","1:5":"BDD7EE","1:6":"BDD7EE","1:7":"BDD7EE","1:8":"BDD7EE","1:9":"BDD7EE","1:10":"BDD7EE","1:11":"BDD7EE","1:12":"BDD7EE","1:13":"BDD7EE","1:14":"BDD7EE","1:15":"BDD7EE","1:16":"BDD7EE","1:17":"BDD7EE","1:18":"BDD7EE","1:19":"BDD7EE","1:20":"BDD7EE","1:21":"BDD7EE","1:22":"BDD7EE","1:23":"BDD7EE","1:24":"BDD7EE","1:25":"BDD7EE","1:26":"BDD7EE","1:27":"BDD7EE","1:28":"BDD7EE","1:29":"BDD7EE","1:30":"BDD7EE","1:31":"BDD7EE","1:32":"BDD7EE","1:33":"BDD7EE","1:34":"BDD7EE","1:35":"BDD7EE","1:36":"BDD7EE","1:37":"BDD7EE","1:38":"BDD7EE","1:39":"BDD7EE","1:40":"BDD7EE","1:41":"BDD7EE","1:42":"BDD7EE","1:43":"BDD7EE","1:44":"BDD7EE","1:45":"BDD7EE","2:3":"BDD7EE","2:4":"BDD7EE","2:5":"BDD7EE","2:6":"BDD7EE","2:7":"DEEBF7","2:8":"DEEBF7","2:9":"DEEBF7","2:10":"DEEBF7","2:11":"DEEBF7","2:12":"DEEBF7","2:13":"DEEBF7","2:14":"DEEBF7","2:15":"DEEBF7","2:16":"DEEBF7","2:17":"DEEBF7","2:18":"DEEBF7","2:19":"DEEBF7","2:20":"DEEBF7","2:21":"DEEBF7","2:22":"DEEBF7","2:23":"DEEBF7","2:24":"DEEBF7","2:25":"DEEBF7","2:26":"BDD7EE","2:27":"BDD7EE","2:28":"BDD7EE","2:29":"BDD7EE","2:30":"BDD7EE","2:31":"BDD7EE","2:32":"BDD7EE","2:33":"BDD7EE","2:34":"BDD7EE","2:35":"BDD7EE","2:36":"BDD7EE","2:37":"BDD7EE","2:38":"CCCCFF","2:39":"CCCCFF","2:40":"CCCCFF","2:41":"CCCCFF","2:42":"CCCCFF","2:43":"CCCCFF","2:44":"CCCCFF","2:45":"CCCCFF","3:3":"BDD7EE","3:4":"BDD7EE","3:5":"BDD7EE","3:6":"BDD7EE","3:7":"DEEBF7","3:8":"DEEBF7","3:9":"DEEBF7","3:10":"DEEBF7","3:11":"DEEBF7","3:12":"DEEBF7","3:13":"DEEBF7","3:14":"DEEBF7","3:15":"DEEBF7","3:16":"DEEBF7","3:17":"DEEBF7","3:18":"DEEBF7","3:19":"DEEBF7","3:20":"DEEBF7","3:21":"DEEBF7","3:22":"DEEBF7","3:23":"DEEBF7","3:24":"DEEBF7","3:25":"DEEBF7","3:26":"BDD7EE","3:27":"BDD7EE","3:28":"BDD7EE","3:29":"BDD7EE","3:30":"BDD7EE","3:31":"BDD7EE","3:32":"BDD7EE","3:33":"BDD7EE","3:34":"BDD7EE","3:35":"BDD7EE","3:36":"BDD7EE","3:37":"BDD7EE","3:38":"CCCCFF","3:39":"CCCCFF","3:40":"CCCCFF","3:41":"CCCCFF","3:42":"CCCCFF","3:43":"CCCCFF","3:44":"CCCCFF","3:45":"CCCCFF","4:3":"BDD7EE","4:4":"BDD7EE","4:5":"BDD7EE","4:6":"BDD7EE","4:7":"DEEBF7","4:8":"DEEBF7","4:9":"DEEBF7","4:10":"DEEBF7","4:11":"DEEBF7","4:12":"DEEBF7","4:13":"DEEBF7","4:14":"DEEBF7","4:15":"DEEBF7","4:16":"DEEBF7","4:17":"DEEBF7","4:18":"DEEBF7","4:19":"DEEBF7","4:20":"DEEBF7","4:21":"DEEBF7","4:22":"DEEBF7","4:23":"DEEBF7","4:24":"DEEBF7","4:25":"DEEBF7","4:26":"BDD7EE","4:27":"BDD7EE","4:28":"BDD7EE","4:29":"BDD7EE","4:30":"BDD7EE","4:31":"BDD7EE","4:32":"BDD7EE","4:33":"BDD7EE","4:34":"BDD7EE","4:35":"BDD7EE","4:36":"BDD7EE","4:37":"BDD7EE","4:38":"CCCCFF","4:39":"CCCCFF","4:40":"CCCCFF","4:41":"CCCCFF","4:42":"CCCCFF","4:43":"CCCCFF","4:44":"CCCCFF","4:45":"CCCCFF"},"body":[],"head":[["","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["Model","Grp.\r\nName","P/No","Input Plan","","","","","Shortage considering the input plan","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","Input Qty.","","","Circuit","1st  R/W Plan","D+0","D+1","D+2","D+3","D+4","D+5","D+6","D+7","D+8","D+9","D+10","D+11","D+12","D+13","D+14","D+15","D+16","D+17","D+18","D+19","D+20","D+21","D+22","D+23","D+24","D+25","D+26","D+27","D+28","D+29","W+5","W+6","W+7","W+8","W+9","W+10","W+11","W+12"],["","","","Rank\r\n1","Rank\r\n5","","","Qty.","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""],["","","","","","Total","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","","",""]]}; /*TEMPLATE*/
 var host = document.getElementById("sheet-host");
 var statusEl = document.getElementById("sheet-status");
+var searchEl = document.getElementById("sh-search");
 
 function setStatus(msg) { statusEl.textContent = msg; }
-function hhmm() { return new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }); }
+function esc(v) { return String(v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+// 셀 = "" | "글자" | ["표시 글자", 숫자]
+function txt(c) { return Array.isArray(c) ? c[0] : c; }
+function num(c) { return Array.isArray(c) ? c[1] : null; }
 
-function loadSaved() {
-  try {
-    var d = JSON.parse(localStorage.getItem(SHEET_KEY) || "null");
-    if (Array.isArray(d) && d.length) return d;
-  } catch (e) {}
-  return [[]];
-}
-function saveNow() {
-  clearTimeout(saveTimer);
-  if (!sheet) return false;
-  try { localStorage.setItem(SHEET_KEY, JSON.stringify(trim(sheet.getData()))); return true; }
-  catch (e) { return false; }
-}
-function queueSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(function () {
-    setStatus(saveNow() ? "자동 저장됨 " + hhmm() : "자동 저장 실패: 엑셀로 내보내 보관하세요");
-  }, 400);
-}
-// 뒤쪽의 빈 행·열을 잘라냅니다.
-function trim(data) {
-  var r = data.length, c = 0;
-  while (r > 0 && data[r - 1].every(function (v) { return v === "" || v == null; })) r--;
-  data = data.slice(0, r);
-  data.forEach(function (row) {
-    for (var i = row.length; i > c; i--) if (row[i - 1] !== "" && row[i - 1] != null) { c = i; break; }
+function planCols() {
+  var out = [];
+  PLAN_RANGES.forEach(function (r) {
+    for (var c = XLSX.utils.decode_col(r[0]); c <= XLSX.utils.decode_col(r[1]); c++) out.push(c);
   });
-  return data.map(function (row) { return row.slice(0, c); });
-}
-function buildSheet(data) {
-  if (sheet) { jspreadsheet.destroy(host); sheet = null; }
-  host.innerHTML = "";
-  var cols = Math.max(MIN_COLS, data.reduce(function (m, r) { return Math.max(m, r.length); }, 0));
-  sheet = jspreadsheet(host, {
-    data: data,
-    minDimensions: [cols, Math.max(MIN_ROWS, data.length)],
-    defaultColWidth: 110,
-    tableOverflow: true,
-    tableWidth: "100%",
-    tableHeight: "520px",
-    wordWrap: false,
-    onafterchanges: queueSave, oninsertrow: queueSave, oninsertcolumn: queueSave,
-    ondeleterow: queueSave, ondeletecolumn: queueSave, onmoverow: queueSave,
-    onmovecolumn: queueSave, onsort: queueSave, onundo: queueSave, onredo: queueSave,
-    text: {
-      insertANewColumnBefore: "왼쪽에 열 삽입", insertANewColumnAfter: "오른쪽에 열 삽입",
-      deleteSelectedColumns: "선택한 열 삭제", renameThisColumn: "열 이름 바꾸기",
-      orderAscending: "오름차순 정렬", orderDescending: "내림차순 정렬",
-      insertANewRowBefore: "위에 행 삽입", insertANewRowAfter: "아래에 행 삽입",
-      deleteSelectedRows: "선택한 행 삭제", copy: "복사", paste: "붙여넣기",
-      saveAs: "CSV로 저장", about: "정보",
-      areYouSureToDeleteTheSelectedRows: "선택한 행을 삭제할까요?",
-      areYouSureToDeleteTheSelectedColumns: "선택한 열을 삭제할까요?",
-      columnName: "열 이름"
-    }
-  });
-}
-function initSheet() {
-  if (sheet) return;
-  if (!window.jspreadsheet) { setStatus("시트 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
-  buildSheet(loadSaved());
-}
-
-// 엑셀 날짜 일련번호 → "2026-10-07" (시간이 있으면 "2026-10-07 14:30")
-function dateText(n) {
-  var d = XLSX.SSF.parse_date_code(n), p = function (x) { return (x < 10 ? "0" : "") + x; };
-  if (!d) return String(n);
-  var t = d.H || d.M ? p(d.H) + ":" + p(d.M) : "";
-  if (n < 1) return t || "00:00";
-  return d.y + "-" + p(d.m) + "-" + p(d.d) + (t ? " " + t : "");
-}
-// 엑셀 워크시트 → 2차원 배열 (수식은 "=..." 로 유지)
-function wsToArray(ws) {
-  if (!ws["!ref"]) return [[]];
-  var rg = XLSX.utils.decode_range(ws["!ref"]), out = [];
-  for (var r = 0; r <= rg.e.r; r++) {
-    var row = [];
-    for (var c = 0; c <= rg.e.c; c++) {
-      var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })], v = "";
-      if (cell) {
-        if (cell.f) v = "=" + cell.f;
-        else if (cell.t === "n" && XLSX.SSF.is_date(cell.z || "General")) v = dateText(cell.v);
-        else if (cell.t === "n") v = cell.v;
-        else v = cell.w != null ? cell.w : (cell.v != null ? String(cell.v) : "");
-      }
-      row.push(v);
-    }
-    out.push(row);
-  }
   return out;
 }
-function readFile(file) {
-  var isCsv = /\.csv$/i.test(file.name);
-  var fr = new FileReader();
-  fr.onload = function () {
-    try {
-      var wb;
-      if (isCsv) {
-        var buf = new Uint8Array(fr.result), txt;
-        try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
-        catch (e) { txt = new TextDecoder("euc-kr").decode(buf); }
-        wb = XLSX.read(txt, { type: "string", raw: true });
-      } else {
-        wb = XLSX.read(fr.result, { type: "array", cellNF: true });
-      }
-      var name = wb.SheetNames[0];
-      buildSheet(wsToArray(wb.Sheets[name]));
-      var ok = saveNow();
-      var extra = wb.SheetNames.length > 1 ? " (첫 시트 '" + name + "'만, 전체 " + wb.SheetNames.length + "개 중)" : "";
-      setStatus("불러옴: " + file.name + extra + (ok ? "" : " · 자동 저장 실패"));
-    } catch (e) {
-      setStatus("파일을 읽지 못했습니다: " + file.name);
+function readCell(ws, r, c) {
+  var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+  if (!cell || cell.v == null || cell.v === "") return "";
+  if (cell.t === "n") return [cell.w != null ? String(cell.w).trim() : String(cell.v), cell.v];
+  return String(cell.w != null ? cell.w : cell.v);
+}
+function readFill(ws, r, c) {
+  var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })], s = cell && cell.s;
+  return s && s.patternType === "solid" && s.fgColor && s.fgColor.rgb ? String(s.fgColor.rgb).slice(-6) : "";
+}
+function extractPlan(ws, fileName) {
+  var cols = planCols(), pos = {};
+  cols.forEach(function (c, i) { pos[c] = i; });
+  var last = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]).e.r : 0;
+  function row(r) { return cols.map(function (c) { return readCell(ws, r, c); }); }
+  function filled(cells) { return cells.some(function (c) { return txt(c) !== ""; }); }
+
+  // 머리글: 1~7행 중 가져오는 열에 값이 하나라도 있는 행
+  var head = [], headRow = {}, hf = {}, r;
+  for (r = 0; r < HEAD_ROWS; r++) {
+    var cells = row(r);
+    if (filled(cells) || head.length) {
+      headRow[r] = head.length; head.push(cells);
+      cols.forEach(function (c, i) { var f = readFill(ws, r, c); if (f) hf[headRow[r] + ":" + i] = f; });
     }
+  }
+  // 병합: 머리글 구역의 병합을 가져오는 열 기준으로 다시 계산
+  var merges = [];
+  (ws["!merges"] || []).forEach(function (m) {
+    if (m.s.r >= HEAD_ROWS) return;
+    var first = -1, n = 0;
+    for (var c = m.s.c; c <= m.e.c; c++) if (pos[c] != null) { if (first < 0) first = pos[c]; n++; }
+    var r0 = -1, rn = 0;
+    for (var rr = m.s.r; rr <= Math.min(m.e.r, HEAD_ROWS - 1); rr++) if (headRow[rr] != null) { if (r0 < 0) r0 = headRow[rr]; rn++; }
+    if (first < 0 || r0 < 0 || (n === 1 && rn === 1)) return;
+    // 병합의 값은 원본 왼쪽 위 칸에 있습니다 (그 칸이 가져오지 않는 열일 수도 있음).
+    var v = readCell(ws, m.s.r, m.s.c);
+    if (txt(v) !== "") head[r0][first] = v;
+    var mf = readFill(ws, m.s.r, m.s.c);
+    if (mf) hf[r0 + ":" + first] = mf;
+    merges.push({ r: r0, c: first, rs: rn, cs: n });
+  });
+  // 본문: 8행부터, 값이 있는 행만
+  // 채우기 색: 한 행이 전부 같은 색이면 행 단위(rf)로, 아니면 칸 단위(bf)로 기억합니다.
+  var body = [], rows = [], rf = [], bf = {};
+  for (r = HEAD_ROWS; r <= last; r++) {
+    var d = row(r);
+    if (!filled(d)) continue;
+    var fills = cols.map(function (c) { return readFill(ws, r, c); });
+    var same = fills[0] && fills.every(function (f) { return f === fills[0]; });
+    rf.push(same ? fills[0] : "");
+    if (!same) fills.forEach(function (f, i) { if (f) bf[body.length + ":" + i] = f; });
+    body.push(d); rows.push(r + 1);
+  }
+  // 열 너비: 엑셀 너비를 화면에서 읽기 좋게 조금 키웁니다.
+  var wc = ws["!cols"] || [];
+  var w = cols.map(function (c) { var px = wc[c] && wc[c].wpx; return Math.max(48, Math.round((px || 64) * 1.3)); });
+  return {
+    file: fileName, at: Date.now(),
+    cols: cols.map(function (c) { return XLSX.utils.encode_col(c); }), w: w,
+    rows: rows, head: head, hf: hf, merges: merges, body: body, rf: rf, bf: bf
+  };
+}
+
+function renderPlan() {
+  var P = plan || PLAN_TEMPLATE;
+  if (!P) { host.innerHTML = ""; return; }
+  var n = P.cols.length, h = P.head.length, i, r, c;
+  var W = function (i) { return (P.w && P.w[i]) || (i < PIN ? 110 : 62); };
+  var hf = P.hf || {}, bf = P.bf || {}, rf = P.rf || [];
+  var left = [0], total = 0;
+  for (i = 0; i < PIN; i++) left.push(left[i] + W(i));
+  for (i = 0; i < n; i++) total += W(i);
+  function attrs(c, span, fill) {
+    var pinned = c + span <= PIN, st = (pinned ? "left:" + left[c] + "px;" : "") + (fill ? "background:#" + fill + ";" : "");
+    return [pinned ? " pin" + (c + span === PIN ? " pin-last" : "") : "", st ? ' style="' + st + '"' : ""];
+  }
+  var html = '<div class="plan-scroll"><table class="plan" style="width:' + total + 'px"><colgroup>';
+  for (i = 0; i < n; i++) html += '<col style="width:' + W(i) + 'px">';
+  html += "</colgroup><thead>";
+
+  var span = {}, covered = {};
+  P.merges.forEach(function (m) {
+    span[m.r + ":" + m.c] = m;
+    for (var a = 0; a < m.rs; a++) for (var b = 0; b < m.cs; b++) if (a || b) covered[(m.r + a) + ":" + (m.c + b)] = 1;
+  });
+  for (r = 0; r < h; r++) {
+    html += "<tr>";
+    for (c = 0; c < n; c++) {
+      if (covered[r + ":" + c]) continue;
+      var m = span[r + ":" + c] || { rs: 1, cs: 1 }, a = attrs(c, m.cs, hf[r + ":" + c]), v = txt(P.head[r][c]);
+      html += '<th class="' + a[0].trim() + '"' + a[1] +
+        (m.rs > 1 ? ' rowspan="' + m.rs + '"' : "") + (m.cs > 1 ? ' colspan="' + m.cs + '"' : "") + ">" + esc(v) + "</th>";
+    }
+    html += "</tr>";
+  }
+  html += "</thead><tbody>";
+
+  var q = searchEl.value.trim().toLowerCase(), shown = 0;
+  for (r = 0; r < P.body.length; r++) {
+    var d = P.body[r];
+    if (q && (txt(d[0]) + " " + txt(d[1]) + " " + txt(d[2])).toLowerCase().indexOf(q) < 0) continue;
+    shown++;
+    html += '<tr' + (/^∑+$/.test(txt(d[2])) ? ' class="sum"' : "") + ">";
+    for (c = 0; c < n; c++) {
+      var x = d[c], nv = num(x), b = attrs(c, 1, rf[r] || bf[r + ":" + c]);
+      html += '<td class="' + ((nv != null ? "num" : "") + (nv != null && nv < 0 ? " neg" : "") + b[0]).trim() + '"' + b[1] + ">" + esc(txt(x)) + "</td>";
+    }
+    html += "</tr>";
+  }
+  if (!plan) html += '<tr><td class="hint" colspan="' + n + '">아직 불러온 파일이 없습니다. Daily Plan 엑셀 파일을 이 표 위로 끌어다 놓거나 “엑셀 파일 넣기”를 누르면 8행부터의 데이터가 여기에 채워집니다.</td></tr>';
+  html += "</tbody></table></div>";
+  host.innerHTML = html;
+  if (!plan) return;
+  var when = new Date(plan.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  setStatus(plan.file + " · " + (q ? shown + " / " : "") + plan.body.length + "행 · " + n + "열 · 불러온 시각 " + when);
+}
+function initSheet() {
+  if (plan || host.firstChild) return;
+  try { plan = JSON.parse(localStorage.getItem(PLAN_KEY) || "null"); } catch (e) { plan = null; }
+  if (plan && !(plan.head && plan.body && plan.cols)) plan = null;
+  renderPlan();
+}
+
+function loadFile(file) {
+  if (!window.XLSX) { setStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
+  if (!/\.(xlsx|xlsm|xls)$/i.test(file.name)) { setStatus("엑셀 파일(.xlsx)만 넣을 수 있습니다: " + file.name); return; }
+  setStatus("읽는 중… " + file.name + " (파일이 크면 몇 초 걸립니다)");
+  var fr = new FileReader();
+  fr.onerror = function () { setStatus("파일을 읽지 못했습니다: " + file.name); };
+  fr.onload = function () {
+    setTimeout(function () {
+      try {
+        var names = XLSX.read(fr.result, { type: "array", bookSheets: true }).SheetNames;
+        var name = names.filter(function (s) { return s.trim().toLowerCase() === PLAN_SHEET; })[0];
+        if (!name) { setStatus("이 파일에는 Plan 시트가 없습니다 (있는 시트: " + names.join(", ") + ")"); return; }
+        var ws = XLSX.read(fr.result, { type: "array", sheets: name, cellStyles: true }).Sheets[name];
+        var next = extractPlan(ws, file.name);
+        if (!next.body.length) { setStatus("Plan 시트 8행 아래에 가져올 데이터가 없습니다: " + file.name); return; }
+        plan = next;
+        searchEl.value = "";
+        renderPlan();
+        try { localStorage.setItem(PLAN_KEY, JSON.stringify(plan)); }
+        catch (e) { setStatus(statusEl.textContent + " · 브라우저 저장 실패(새로고침하면 사라짐)"); }
+      } catch (e) {
+        setStatus("파일을 읽지 못했습니다: " + file.name);
+      }
+    }, 30);
   };
   fr.readAsArrayBuffer(file);
 }
 function exportXlsx() {
-  if (!sheet || !window.XLSX) return;
-  var data = trim(sheet.getData());
-  var NUM = /^-?(0|[1-9]\d*)(\.\d+)?$/;
-  var aoa = data.map(function (row, y) {
-    return row.map(function (v, x) {
-      if (typeof v === "string" && v.charAt(0) === "=" && v.length > 1) {
-        // 수식은 그대로 두고, 화면에 계산된 값도 함께 넣습니다.
-        var shown = String(sheet.getValueFromCoords(x, y, true));
-        return NUM.test(shown) ? { t: "n", v: Number(shown), f: v.slice(1) } : { t: "s", v: shown, f: v.slice(1) };
-      }
-      if (typeof v === "string" && NUM.test(v)) return Number(v);
-      return v;
-    });
-  });
-  var ws = XLSX.utils.aoa_to_sheet(aoa.length ? aoa : [[]]);
+  if (!plan || !window.XLSX) { setStatus("내보낼 내용이 없습니다. 먼저 엑셀 파일을 넣어 주세요."); return; }
+  var raw = function (c) { var v = num(c); return v != null ? v : txt(c); };
+  var aoa = plan.head.concat(plan.body).map(function (row) { return row.map(raw); });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = plan.merges.map(function (m) { return { s: { r: m.r, c: m.c }, e: { r: m.r + m.rs - 1, c: m.c + m.cs - 1 } }; });
+  ws["!cols"] = plan.cols.map(function (_, i) { return { wpx: (plan.w && plan.w[i]) || 62 }; });
   var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "가공계획");
-  var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+  XLSX.utils.book_append_sheet(wb, ws, "Plan");
+  var d = new Date(), p = function (x) { return (x < 10 ? "0" : "") + x; };
   XLSX.writeFile(wb, "가공계획_" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + ".xlsx");
-  setStatus("엑셀로 내보냄 " + hhmm());
 }
 
 var fileInput = document.getElementById("sh-file");
-document.getElementById("sh-import").addEventListener("click", function () {
-  if (!window.XLSX) { setStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
-  var has = sheet && trim(sheet.getData()).length > 0;
-  if (has && !confirm("지금 시트 내용을 불러온 파일로 바꿉니다. 계속할까요?")) return;
-  fileInput.value = ""; fileInput.click();
-});
-fileInput.addEventListener("change", function () { if (fileInput.files[0]) readFile(fileInput.files[0]); });
+var panelEl = document.getElementById("sheet-panel");
+document.getElementById("sh-import").addEventListener("click", function () { fileInput.value = ""; fileInput.click(); });
+fileInput.addEventListener("change", function () { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
 document.getElementById("sh-export").addEventListener("click", exportXlsx);
-document.getElementById("sh-row").addEventListener("click", function () { if (sheet) sheet.insertRow(); });
-document.getElementById("sh-col").addEventListener("click", function () { if (sheet) sheet.insertColumn(); });
 document.getElementById("sh-clear").addEventListener("click", function () {
-  if (!sheet || !confirm("시트 내용을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?")) return;
-  buildSheet([[]]);
-  try { localStorage.removeItem(SHEET_KEY); } catch (e) {}
-  setStatus("시트를 비웠습니다");
+  if (!plan || !confirm("불러온 계획표를 화면에서 지웁니다. 원본 엑셀 파일은 그대로입니다. 계속할까요?")) return;
+  plan = null;
+  try { localStorage.removeItem(PLAN_KEY); localStorage.removeItem("pl-sheet-machining"); } catch (e) {}
+  renderPlan();
+  setStatus("비웠습니다. 엑셀 파일을 다시 넣어 주세요.");
+});
+var searchTimer = null;
+searchEl.addEventListener("input", function () { clearTimeout(searchTimer); searchTimer = setTimeout(renderPlan, 150); });
+["dragenter", "dragover"].forEach(function (ev) {
+  panelEl.addEventListener(ev, function (e) { e.preventDefault(); panelEl.classList.add("drag"); });
+});
+["dragleave", "drop"].forEach(function (ev) {
+  panelEl.addEventListener(ev, function (e) { e.preventDefault(); panelEl.classList.remove("drag"); });
+});
+panelEl.addEventListener("drop", function (e) {
+  var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
 });
 
 var ORDER = ["machining", "assembly", "shipping", "warehouse"];
