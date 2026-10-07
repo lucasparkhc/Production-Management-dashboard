@@ -135,9 +135,9 @@ body.wide .wrap { max-width: none; }
       <div class="group">
         <span class="group-label">생산관리</span>
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab" id="tab-machining" data-sec="machining">가공계획수립</button>
-          <button class="tab" role="tab" id="tab-assembly" data-sec="assembly">조립계획수립</button>
-          <button class="tab" role="tab" id="tab-shipping" data-sec="shipping">출고계획수립</button>
+          <button class="tab" role="tab" id="tab-machining" data-sec="machining">가공계획</button>
+          <button class="tab" role="tab" id="tab-assembly" data-sec="assembly">조립계획</button>
+          <button class="tab" role="tab" id="tab-shipping" data-sec="shipping">출고계획</button>
         </div>
       </div>
       <div class="group">
@@ -156,7 +156,7 @@ body.wide .wrap { max-width: none; }
     <div class="sec-head">
       <div>
         <div class="crumb">생산관리 / 01</div>
-        <h2>가공계획수립</h2>
+        <h2>가공계획</h2>
         <p>가공 공정의 생산 계획을 세우고 진행 상황을 확인하는 화면입니다.</p>
       </div>
       <span class="badge">엑셀 연동</span>
@@ -167,7 +167,7 @@ body.wide .wrap { max-width: none; }
     <div class="sec-head">
       <div>
         <div class="crumb">생산관리 / 02</div>
-        <h2>조립계획수립</h2>
+        <h2>조립계획</h2>
         <p>조립 라인의 생산 계획을 세우고 진행 상황을 확인하는 화면입니다.</p>
       </div>
       <span class="badge">엑셀 연동</span>
@@ -178,7 +178,7 @@ body.wide .wrap { max-width: none; }
     <div class="sec-head">
       <div>
         <div class="crumb">생산관리 / 03</div>
-        <h2>출고계획수립</h2>
+        <h2>출고계획</h2>
         <p>완성품 출고 일정을 세우고 납기 대응 현황을 확인하는 화면입니다.</p>
       </div>
       <span class="badge">엑셀 연동</span>
@@ -268,7 +268,7 @@ var FIXED_RANGES = [["B", "B"], ["D", "D"], ["F", "F"]];
 var PLAN_SECTIONS = {
   machining: { title: "가공 계획표", ranges: [["EY", "FC"], ["FJ", "GU"]] },
   assembly:  { title: "조립 계획표", ranges: [["HC", "IQ"]] },
-  shipping:  { title: "출고 계획표", ranges: [["IW", "KO"]] }
+  shipping:  { title: "출고 계획표", ranges: [["IW", "JD"], ["JK", "KO"]] }   // Box Qty. 구역은 JD(Qty. per 1 Box)만, JE~JJ는 뺌
 };
 var HEAD_FIRST = 3;     // 머리글 시작 = 엑셀 4행 (0부터 세면 3)
 var HEAD_ROWS = 7;      // 머리글 끝 = 엑셀 7행, 8행부터 데이터
@@ -432,6 +432,38 @@ function syncFit() {
   document.body.classList.toggle("wide", fitOn && !!PLAN_SECTIONS[cur] && !panelEl.hidden);
 }
 
+// 저장해 둔 표(또는 기본 틀)의 열 구성이 지금 설정과 다르면, 지금 설정에 있는 열만 남깁니다 (파일을 다시 넣지 않아도 되게).
+function projectPlan(d, sec) {
+  if (!d || !d.cols) return d;
+  var colIdx = function (t) { var n = 0; for (var i = 0; i < t.length; i++) n = n * 26 + t.charCodeAt(i) - 64; return n - 1; };
+  var colName = function (n) { var t = ""; for (n++; n > 0; n = Math.floor((n - 1) / 26)) t = String.fromCharCode(65 + (n - 1) % 26) + t; return t; };
+  var want = [];
+  FIXED_RANGES.concat(PLAN_SECTIONS[sec].ranges).forEach(function (r) { for (var c = colIdx(r[0]); c <= colIdx(r[1]); c++) want.push(colName(c)); });
+  if (d.cols.join() === want.join()) return d;
+  var keep = [], pos = {};
+  d.cols.forEach(function (c, i) { if (want.indexOf(c) >= 0) { pos[i] = keep.length; keep.push(i); } });
+  if (keep.length !== want.length) return d;
+  var pick = function (row) { return keep.map(function (i) { return row[i]; }); };
+  var rekey = function (o) {
+    var out = {};
+    Object.keys(o || {}).forEach(function (k) { var p = k.split(":"); if (pos[p[1]] != null) out[p[0] + ":" + pos[p[1]]] = o[k]; });
+    return out;
+  };
+  var head = d.head.map(pick), hf = rekey(d.hf), merges = [];
+  (d.merges || []).forEach(function (m) {
+    var first = -1, n = 0;
+    for (var c = m.c; c < m.c + m.cs; c++) if (pos[c] != null) { if (first < 0) first = pos[c]; n++; }
+    if (first < 0) return;
+    if (pos[m.c] == null) { head[m.r][first] = d.head[m.r][m.c]; if (d.hf && d.hf[m.r + ":" + m.c]) hf[m.r + ":" + first] = d.hf[m.r + ":" + m.c]; }
+    if (n > 1 || m.rs > 1) merges.push({ r: m.r, c: first, rs: m.rs, cs: n });
+  });
+  var out = {};
+  Object.keys(d).forEach(function (k) { out[k] = d[k]; });
+  out.cols = want; out.w = d.w ? pick(d.w) : d.w; out.head = head; out.hf = hf; out.merges = merges;
+  out.body = (d.body || []).map(pick); out.bf = rekey(d.bf);
+  return out;
+}
+
 function renderPlan() {
   renderSummary();
   var P = plan || PLAN_TEMPLATE;
@@ -497,14 +529,14 @@ function loadStored(sec) {
   if (sec in plans) return;
   var d = null;
   try { d = JSON.parse(localStorage.getItem(planKey(sec)) || "null"); } catch (e) {}
-  plans[sec] = d && d.head && d.body && d.cols ? d : null;
+  plans[sec] = d && d.head && d.body && d.cols ? projectPlan(d, sec) : null;
 }
 // 섹션을 바꿀 때마다 불립니다.
 function initSheet(sec) {
   cur = sec;
   loadStored(sec);
   plan = plans[sec];
-  PLAN_TEMPLATE = PLAN_TEMPLATES[sec] || null;
+  PLAN_TEMPLATE = PLAN_TEMPLATES[sec] ? (PLAN_TEMPLATES[sec] = projectPlan(PLAN_TEMPLATES[sec], sec)) : null;
   document.getElementById("sheet-title").textContent = PLAN_SECTIONS[sec].title;
   panelEl.setAttribute("aria-label", PLAN_SECTIONS[sec].title);
   searchEl.value = "";
