@@ -94,6 +94,17 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .plan tr.sum td { font-weight: 700; }
 .plan tbody tr:hover td { box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.06); }
 .plan td.hint { text-align: left; color: #5f6770; padding: 14px 12px; font-size: 13px; height: auto; }
+/* ── Grp.Name별 요약 표 ── */
+.sum-scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 4px; }
+.sum-table { border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 100%; }
+.sum-table th, .sum-table td { padding: 6px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: right; background: var(--surface); }
+.sum-table thead th { position: sticky; top: 0; z-index: 2; background: var(--accent-soft); color: var(--fg); font-weight: 600; white-space: pre-line; line-height: 1.25; vertical-align: bottom; border-bottom: 2px solid var(--accent); }
+.sum-table .k { text-align: left; position: sticky; left: 0; z-index: 1; font-weight: 500; }
+.sum-table thead .k { z-index: 3; }
+.sum-table td.z { color: var(--muted); opacity: 0.55; }
+.sum-table tbody tr:hover td { background: var(--slot); }
+.sum-table tfoot td { position: sticky; bottom: 0; font-weight: 700; background: var(--accent-soft); border-top: 2px solid var(--accent); border-bottom: 0; }
+.sum-hint { margin: 0; font-size: 13px; color: var(--muted); }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
   .slot.wide { grid-column: 1 / -1; }
@@ -177,6 +188,16 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
       </div>
       <span class="badge">내용 준비 중</span>
     </div>
+  </section>
+
+  <section class="sheet-panel" id="sum-panel" hidden aria-label="Grp.Name별 요약">
+    <div class="sheet-top">
+      <div>
+        <h3 id="sum-title">Grp.Name별 요약</h3>
+        <span class="sheet-status" id="sum-status"></span>
+      </div>
+    </div>
+    <div id="sum-host"></div>
   </section>
 
   <section class="sheet-panel" id="sheet-panel" hidden aria-label="계획표">
@@ -329,7 +350,52 @@ function extractPlan(ws, fileName, ranges) {
   };
 }
 
+// ── Grp.Name별 요약: 계획표의 P/No 행(↑, ∑, ∑∑ 소계 행 제외)을 Model · Grp.Name 단위로 더합니다. ──
+//   가공: Rank 1 · Rank 5 · R/W 수량.  조립·출고: 계획 구역(머리글 첫 묶음)의 일자별 수량.
+var SUM_TITLES = {
+  machining: "Grp.Name별 투입 수량 (Rank 1 · Rank 5 · R/W)",
+  assembly: "일자별 · Grp.Name별 조립 수량",
+  shipping: "일자별 · Grp.Name별 출고 수량"
+};
+function sumColumns(sec, P) {
+  if (sec === "machining") return [{ i: 3, label: "Rank 1" }, { i: 4, label: "Rank 5" }, { i: 7, label: "R/W" }];
+  var end = PIN + 1, out = [];
+  while (end < P.cols.length && txt(P.head[0][end]) === "") end++;
+  for (var c = PIN; c < end; c++) {
+    var parts = [];
+    for (var r = 1; r < P.head.length; r++) { var t = String(txt(P.head[r][c])).replace(/\s+/g, " ").trim(); if (t) parts.push(t); }
+    out.push({ i: c, label: parts.join("\n") || P.cols[c] });
+  }
+  return out;
+}
+function renderSummary() {
+  var box = document.getElementById("sum-host"), st = document.getElementById("sum-status");
+  document.getElementById("sum-title").textContent = SUM_TITLES[cur] || "Grp.Name별 요약";
+  if (!plan) { st.textContent = ""; box.innerHTML = '<p class="sum-hint">엑셀 파일을 넣으면 Grp.Name별 합계가 여기에 표시됩니다.</p>'; return; }
+  var cols = sumColumns(cur, plan), groups = [], idx = {}, tot = cols.map(function () { return 0; }), items = 0;
+  plan.body.forEach(function (d) {
+    var pno = txt(d[2]), grp = txt(d[1]);
+    if (pno === "" || grp === "" || /^(↑|∑+)$/.test(pno)) return;
+    var key = txt(d[0]) + "\u0001" + grp, g = idx[key];
+    if (!g) { g = idx[key] = { model: txt(d[0]), grp: grp, v: cols.map(function () { return 0; }), n: 0 }; groups.push(g); }
+    g.n++; items++;
+    cols.forEach(function (col, j) { var v = num(d[col.i]); if (v != null && isFinite(v)) { g.v[j] += v; tot[j] += v; } });
+  });
+  var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
+  var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
+  var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="k" style="position:static">Grp. Name</th><th>P/No 수</th>';
+  cols.forEach(function (c) { html += "<th>" + esc(c.label) + "</th>"; });
+  html += "</tr></thead><tbody>";
+  groups.forEach(function (g) {
+    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="k" style="position:static">' + esc(g.grp) + "</td><td>" + g.n + "</td>" + g.v.map(cell).join("") + "</tr>";
+  });
+  html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td><td>' + items + "</td>" + tot.map(cell).join("") + "</tr></tfoot></table></div>";
+  box.innerHTML = html;
+  st.textContent = groups.length + "개 그룹 · P/No " + items + "개 · 소계 행(↑, ∑) 제외하고 합산";
+}
+
 function renderPlan() {
+  renderSummary();
   var P = plan || PLAN_TEMPLATE;
   if (!P) { host.innerHTML = ""; return; }
   var n = P.cols.length, h = P.head.length, i, r, c;
@@ -493,6 +559,7 @@ function show(sec) {
   });
   var sp = document.getElementById("sheet-panel");
   sp.hidden = !PLAN_SECTIONS[sec];
+  document.getElementById("sum-panel").hidden = !PLAN_SECTIONS[sec];
   if (PLAN_SECTIONS[sec]) initSheet(sec);
   grid.innerHTML = "";
   SLOTS[sec].forEach(function (s) {
