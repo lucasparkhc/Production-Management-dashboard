@@ -351,14 +351,14 @@ function extractPlan(ws, fileName, ranges) {
 }
 
 // ── Grp.Name별 요약: 계획표의 P/No 행(↑, ∑, ∑∑ 소계 행 제외)을 Model · Grp.Name 단위로 더합니다. ──
-//   가공: Rank 1 · Rank 5 · R/W 수량.  조립·출고: 계획 구역(머리글 첫 묶음)의 일자별 수량.
+//   가공: Rank 1 · Rank 5 · Circuit · R/W (EY, EZ, FB, FC 열).  조립·출고: 계획 구역(머리글 첫 묶음)의 일자별 수량.
 var SUM_TITLES = {
-  machining: "Grp.Name별 투입 수량 (Rank 1 · Rank 5 · R/W)",
+  machining: "Grp.Name별 투입 수량 (Rank 1 · Rank 5 · Circuit · R/W)",
   assembly: "일자별 · Grp.Name별 조립 수량",
   shipping: "일자별 · Grp.Name별 출고 수량"
 };
 function sumColumns(sec, P) {
-  if (sec === "machining") return [{ i: 3, label: "Rank 1" }, { i: 4, label: "Rank 5" }, { i: 7, label: "R/W" }];
+  if (sec === "machining") return [{ i: 3, label: "Rank 1" }, { i: 4, label: "Rank 5" }, { i: 6, label: "Circuit" }, { i: 7, label: "R/W" }];
   var end = PIN + 1, out = [];
   while (end < P.cols.length && txt(P.head[0][end]) === "") end++;
   for (var c = PIN; c < end; c++) {
@@ -383,15 +383,15 @@ function renderSummary() {
   });
   var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
   var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
-  var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="k" style="position:static">Grp. Name</th><th>P/No 수</th>';
+  var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="k" style="position:static">Grp. Name</th>';
   cols.forEach(function (c) { html += "<th>" + esc(c.label) + "</th>"; });
   html += "</tr></thead><tbody>";
   groups.forEach(function (g) {
-    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="k" style="position:static">' + esc(g.grp) + "</td><td>" + g.n + "</td>" + g.v.map(cell).join("") + "</tr>";
+    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="k" style="position:static">' + esc(g.grp) + "</td>" + g.v.map(cell).join("") + "</tr>";
   });
-  html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td><td>' + items + "</td>" + tot.map(cell).join("") + "</tr></tfoot></table></div>";
+  html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td>' + tot.map(cell).join("") + "</tr></tfoot></table></div>";
   box.innerHTML = html;
-  st.textContent = groups.length + "개 그룹 · P/No " + items + "개 · 소계 행(↑, ∑) 제외하고 합산";
+  st.textContent = groups.length + "개 그룹 · 소계 행(↑, ∑) 제외하고 합산";
 }
 
 function renderPlan() {
