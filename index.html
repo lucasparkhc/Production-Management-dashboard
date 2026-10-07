@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Production Management & Logistic</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsuites@4.17.7/dist/jsuites.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4.13.4/dist/jspreadsheet.css">
 <style>
 /* Layout: sticky header with a two-group tab rail (생산관리 ×3 | 물류 ×1); one section panel visible at a time, each a grid of empty slots. */
 :root {
@@ -66,6 +68,35 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .slot h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .slot p { margin: 0; font-size: 13px; color: var(--muted); }
 .slot .tag { margin-top: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+/* ── 편집 시트 ── */
+.sheet-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sheet-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.sheet-top h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.sheet-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn { appearance: none; font: inherit; font-size: 13px; font-weight: 500; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.btn.primary:hover { color: var(--surface); filter: brightness(1.08); }
+.sheet-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.sheet-host { min-width: 0; overflow: hidden; }
+.sheet-host .jexcel_content { border: 1px solid var(--line); border-radius: 4px; box-shadow: none; padding: 0; }
+.sheet-host .jexcel { font-family: var(--font-ui); font-size: 13px; border-color: var(--line); }
+.sheet-host .jexcel > thead > tr > td,
+.sheet-host .jexcel > tbody > tr > td:first-child { background: var(--slot); color: var(--muted); border-color: var(--line); font-family: var(--font-mono); font-size: 11px; }
+.sheet-host .jexcel > thead > tr > td.selected,
+.sheet-host .jexcel > tbody > tr.selected > td:first-child { background: var(--accent-soft); color: var(--accent); }
+.sheet-host .jexcel > tbody > tr > td { background: var(--surface); color: var(--fg); border-color: var(--line); }
+.sheet-host .jexcel > tbody > tr > td.highlight { background: var(--accent-soft); }
+.sheet-host .jexcel .highlight-top { border-top-color: var(--accent); }
+.sheet-host .jexcel .highlight-bottom { border-bottom-color: var(--accent); }
+.sheet-host .jexcel .highlight-left { border-left-color: var(--accent); }
+.sheet-host .jexcel .highlight-right { border-right-color: var(--accent); }
+.sheet-host .jexcel > tbody > tr > td.editor > input { background: var(--surface); color: var(--fg); font: inherit; }
+.sheet-host .jexcel_corner { background: var(--accent); border-color: var(--surface); }
+.jcontextmenu { background: var(--surface); color: var(--fg); border-color: var(--line); font-family: var(--font-ui); }
+.jcontextmenu > div:hover { background: var(--accent-soft); }
+.jcontextmenu hr { border-color: var(--line); }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
   .slot.wide { grid-column: 1 / -1; }
@@ -114,7 +145,7 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
         <h2>가공계획수립</h2>
         <p>가공 공정의 생산 계획을 세우고 진행 상황을 확인하는 화면입니다.</p>
       </div>
-      <span class="badge">내용 준비 중</span>
+      <span class="badge">시트 사용 가능</span>
     </div>
   </section>
 
@@ -151,10 +182,31 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
     </div>
   </section>
 
+  <section class="sheet-panel" id="sheet-panel" hidden aria-label="가공 계획 시트">
+    <div class="sheet-top">
+      <div>
+        <h3>가공 계획 시트</h3>
+        <span class="sheet-status" id="sheet-status">셀을 클릭해 입력하세요</span>
+      </div>
+      <div class="sheet-tools">
+        <button class="btn" id="sh-import" type="button">엑셀 불러오기</button>
+        <button class="btn primary" id="sh-export" type="button">엑셀로 내보내기</button>
+        <button class="btn" id="sh-row" type="button">행 추가</button>
+        <button class="btn" id="sh-col" type="button">열 추가</button>
+        <button class="btn" id="sh-clear" type="button">전체 비우기</button>
+        <input type="file" id="sh-file" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+    </div>
+    <div class="sheet-host" id="sheet-host"></div>
+  </section>
+
   <div class="grid" id="grid"></div>
 </main>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/jsuites@4.17.7/dist/jsuites.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4.13.4/dist/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // 섹션별 빈 자리. 실제 내용이 정해지면 이 자리를 채웁니다.
 var SLOTS = {
@@ -162,9 +214,7 @@ var SLOTS = {
     ["요약 지표", "계획 대비 실적 같은 핵심 숫자가 들어갈 자리", ""],
     ["요약 지표", "설비 가동, 부하율 등", ""],
     ["요약 지표", "지연·이슈 건수 등", ""],
-    ["가공 계획표", "설비·품번·일자별 계획이 들어갈 자리", "wide"],
-    ["설비별 현황", "설비 부하나 상태 목록", "tall"],
-    ["상세 목록", "작업지시 단위의 표가 들어갈 자리", "full"]
+    ["설비별 현황", "설비 부하나 상태 목록", "full"]
   ],
   assembly: [
     ["요약 지표", "계획 대비 실적 같은 핵심 숫자가 들어갈 자리", ""],
@@ -191,6 +241,173 @@ var SLOTS = {
     ["상세 목록", "품목 단위의 재고 표가 들어갈 자리", "full"]
   ]
 };
+// ── 가공 계획 시트: 편집 가능한 격자 + 엑셀 불러오기/내보내기. 값은 이 브라우저에 자동 저장됩니다. ──
+var SHEET_KEY = "pl-sheet-machining";
+var MIN_COLS = 12, MIN_ROWS = 30;
+var sheet = null, saveTimer = null;
+var host = document.getElementById("sheet-host");
+var statusEl = document.getElementById("sheet-status");
+
+function setStatus(msg) { statusEl.textContent = msg; }
+function hhmm() { return new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }); }
+
+function loadSaved() {
+  try {
+    var d = JSON.parse(localStorage.getItem(SHEET_KEY) || "null");
+    if (Array.isArray(d) && d.length) return d;
+  } catch (e) {}
+  return [[]];
+}
+function saveNow() {
+  clearTimeout(saveTimer);
+  if (!sheet) return false;
+  try { localStorage.setItem(SHEET_KEY, JSON.stringify(trim(sheet.getData()))); return true; }
+  catch (e) { return false; }
+}
+function queueSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function () {
+    setStatus(saveNow() ? "자동 저장됨 " + hhmm() : "자동 저장 실패: 엑셀로 내보내 보관하세요");
+  }, 400);
+}
+// 뒤쪽의 빈 행·열을 잘라냅니다.
+function trim(data) {
+  var r = data.length, c = 0;
+  while (r > 0 && data[r - 1].every(function (v) { return v === "" || v == null; })) r--;
+  data = data.slice(0, r);
+  data.forEach(function (row) {
+    for (var i = row.length; i > c; i--) if (row[i - 1] !== "" && row[i - 1] != null) { c = i; break; }
+  });
+  return data.map(function (row) { return row.slice(0, c); });
+}
+function buildSheet(data) {
+  if (sheet) { jspreadsheet.destroy(host); sheet = null; }
+  host.innerHTML = "";
+  var cols = Math.max(MIN_COLS, data.reduce(function (m, r) { return Math.max(m, r.length); }, 0));
+  sheet = jspreadsheet(host, {
+    data: data,
+    minDimensions: [cols, Math.max(MIN_ROWS, data.length)],
+    defaultColWidth: 110,
+    tableOverflow: true,
+    tableWidth: "100%",
+    tableHeight: "520px",
+    wordWrap: false,
+    onafterchanges: queueSave, oninsertrow: queueSave, oninsertcolumn: queueSave,
+    ondeleterow: queueSave, ondeletecolumn: queueSave, onmoverow: queueSave,
+    onmovecolumn: queueSave, onsort: queueSave, onundo: queueSave, onredo: queueSave,
+    text: {
+      insertANewColumnBefore: "왼쪽에 열 삽입", insertANewColumnAfter: "오른쪽에 열 삽입",
+      deleteSelectedColumns: "선택한 열 삭제", renameThisColumn: "열 이름 바꾸기",
+      orderAscending: "오름차순 정렬", orderDescending: "내림차순 정렬",
+      insertANewRowBefore: "위에 행 삽입", insertANewRowAfter: "아래에 행 삽입",
+      deleteSelectedRows: "선택한 행 삭제", copy: "복사", paste: "붙여넣기",
+      saveAs: "CSV로 저장", about: "정보",
+      areYouSureToDeleteTheSelectedRows: "선택한 행을 삭제할까요?",
+      areYouSureToDeleteTheSelectedColumns: "선택한 열을 삭제할까요?",
+      columnName: "열 이름"
+    }
+  });
+}
+function initSheet() {
+  if (sheet) return;
+  if (!window.jspreadsheet) { setStatus("시트 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
+  buildSheet(loadSaved());
+}
+
+// 엑셀 날짜 일련번호 → "2026-10-07" (시간이 있으면 "2026-10-07 14:30")
+function dateText(n) {
+  var d = XLSX.SSF.parse_date_code(n), p = function (x) { return (x < 10 ? "0" : "") + x; };
+  if (!d) return String(n);
+  var t = d.H || d.M ? p(d.H) + ":" + p(d.M) : "";
+  if (n < 1) return t || "00:00";
+  return d.y + "-" + p(d.m) + "-" + p(d.d) + (t ? " " + t : "");
+}
+// 엑셀 워크시트 → 2차원 배열 (수식은 "=..." 로 유지)
+function wsToArray(ws) {
+  if (!ws["!ref"]) return [[]];
+  var rg = XLSX.utils.decode_range(ws["!ref"]), out = [];
+  for (var r = 0; r <= rg.e.r; r++) {
+    var row = [];
+    for (var c = 0; c <= rg.e.c; c++) {
+      var cell = ws[XLSX.utils.encode_cell({ r: r, c: c })], v = "";
+      if (cell) {
+        if (cell.f) v = "=" + cell.f;
+        else if (cell.t === "n" && XLSX.SSF.is_date(cell.z || "General")) v = dateText(cell.v);
+        else if (cell.t === "n") v = cell.v;
+        else v = cell.w != null ? cell.w : (cell.v != null ? String(cell.v) : "");
+      }
+      row.push(v);
+    }
+    out.push(row);
+  }
+  return out;
+}
+function readFile(file) {
+  var isCsv = /\.csv$/i.test(file.name);
+  var fr = new FileReader();
+  fr.onload = function () {
+    try {
+      var wb;
+      if (isCsv) {
+        var buf = new Uint8Array(fr.result), txt;
+        try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+        catch (e) { txt = new TextDecoder("euc-kr").decode(buf); }
+        wb = XLSX.read(txt, { type: "string", raw: true });
+      } else {
+        wb = XLSX.read(fr.result, { type: "array", cellNF: true });
+      }
+      var name = wb.SheetNames[0];
+      buildSheet(wsToArray(wb.Sheets[name]));
+      var ok = saveNow();
+      var extra = wb.SheetNames.length > 1 ? " (첫 시트 '" + name + "'만, 전체 " + wb.SheetNames.length + "개 중)" : "";
+      setStatus("불러옴: " + file.name + extra + (ok ? "" : " · 자동 저장 실패"));
+    } catch (e) {
+      setStatus("파일을 읽지 못했습니다: " + file.name);
+    }
+  };
+  fr.readAsArrayBuffer(file);
+}
+function exportXlsx() {
+  if (!sheet || !window.XLSX) return;
+  var data = trim(sheet.getData());
+  var NUM = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+  var aoa = data.map(function (row, y) {
+    return row.map(function (v, x) {
+      if (typeof v === "string" && v.charAt(0) === "=" && v.length > 1) {
+        // 수식은 그대로 두고, 화면에 계산된 값도 함께 넣습니다.
+        var shown = String(sheet.getValueFromCoords(x, y, true));
+        return NUM.test(shown) ? { t: "n", v: Number(shown), f: v.slice(1) } : { t: "s", v: shown, f: v.slice(1) };
+      }
+      if (typeof v === "string" && NUM.test(v)) return Number(v);
+      return v;
+    });
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa.length ? aoa : [[]]);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "가공계획");
+  var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+  XLSX.writeFile(wb, "가공계획_" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + ".xlsx");
+  setStatus("엑셀로 내보냄 " + hhmm());
+}
+
+var fileInput = document.getElementById("sh-file");
+document.getElementById("sh-import").addEventListener("click", function () {
+  if (!window.XLSX) { setStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
+  var has = sheet && trim(sheet.getData()).length > 0;
+  if (has && !confirm("지금 시트 내용을 불러온 파일로 바꿉니다. 계속할까요?")) return;
+  fileInput.value = ""; fileInput.click();
+});
+fileInput.addEventListener("change", function () { if (fileInput.files[0]) readFile(fileInput.files[0]); });
+document.getElementById("sh-export").addEventListener("click", exportXlsx);
+document.getElementById("sh-row").addEventListener("click", function () { if (sheet) sheet.insertRow(); });
+document.getElementById("sh-col").addEventListener("click", function () { if (sheet) sheet.insertColumn(); });
+document.getElementById("sh-clear").addEventListener("click", function () {
+  if (!sheet || !confirm("시트 내용을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?")) return;
+  buildSheet([[]]);
+  try { localStorage.removeItem(SHEET_KEY); } catch (e) {}
+  setStatus("시트를 비웠습니다");
+});
+
 var ORDER = ["machining", "assembly", "shipping", "warehouse"];
 var tabs = document.querySelectorAll(".tab");
 var grid = document.getElementById("grid");
@@ -204,6 +421,9 @@ function show(sec) {
     t.tabIndex = on ? 0 : -1;
     if (on && t.scrollIntoView) t.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
+  var sp = document.getElementById("sheet-panel");
+  sp.hidden = sec !== "machining";
+  if (sec === "machining") initSheet();
   grid.innerHTML = "";
   SLOTS[sec].forEach(function (s) {
     var d = document.createElement("div");
