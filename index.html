@@ -98,7 +98,8 @@ main { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22p
 .plan .pin-last { border-right: 2px solid #5f6770; }
 .plan tr.sum td { font-weight: 700; }
 .plan tbody tr:hover td { box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.06); }
-body.wide .wrap { max-width: none; }
+/* 한 화면 맞춤: 위쪽(제목 · 탭 줄)은 그대로 두고 계획표 상자만 화면 폭 끝까지 넓힙니다. */
+body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw + 20px); }
 .plan td.hint { text-align: left; color: #5f6770; padding: 14px 12px; font-size: 13px; height: auto; }
 /* ── Grp.Name별 요약 표 ── */
 .sum-scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 4px; }
@@ -159,10 +160,9 @@ body.wide .wrap { max-width: none; }
 .subtab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .subtab[aria-selected="true"] { background: var(--accent); color: var(--surface); font-weight: 600; }
 .subbar .sheet-status { flex: 1; min-width: 0; }
-/* 계획표 탭: 표가 화면 남은 높이를 다 쓰도록 위쪽 여백과 제목을 줄입니다 (페이지 스크롤 없음). */
-body.view-plan .sec-head { display: none; }
-body.view-plan main { padding-block: 14px 14px; gap: 12px; }
-body.view-plan .sheet-panel { padding: 12px 14px 12px; gap: 8px; }
+.subbar .sheet-status + .btn { margin-left: auto; }   /* 상태 글이 숨겨져도 버튼은 항상 오른쪽 끝 */
+/* 위쪽(제목 · 작은 탭 줄)은 모든 화면 · 모든 탭에서 같은 모양입니다. 계획표 탭은 아래 여백만 줄여 표가 화면 끝까지 닿게 합니다. */
+body.view-plan main { padding-bottom: 14px; }
 .hist-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
 .hist-chart { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 8px; background: var(--surface); }
 .hist-chart h4 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -323,9 +323,20 @@ body.view-plan .sheet-panel { padding: 12px 14px 12px; gap: 8px; }
   </section>
 
   <div id="wh-wrap" hidden>
+    <div class="subbar" id="wh-bar">
+      <div class="subtabs" role="tablist" aria-label="보기">
+        <button class="subtab" role="tab" type="button" data-wview="map">배치도</button>
+        <button class="subtab" role="tab" type="button" data-wview="stock">재고</button>
+        <button class="subtab" role="tab" type="button" data-wview="io">입출고 처리</button>
+      </div>
+      <span class="sheet-status" id="wh-bar-status"></span>
+      <button class="btn primary" id="wh-bar-in" type="button">입고 엑셀 넣기</button>
+      <button class="btn primary" id="wh-bar-out" type="button">출고 엑셀 넣기</button>
+    </div>
+
     <div class="wh-kpis" id="wh-kpis"></div>
 
-    <section class="sheet-panel" aria-label="창고 배치도">
+    <section class="sheet-panel" id="wh-sec-map" aria-label="창고 배치도">
       <div class="sheet-top">
         <div>
           <h3>창고 배치도</h3>
@@ -340,7 +351,7 @@ body.view-plan .sheet-panel { padding: 12px 14px 12px; gap: 8px; }
       <div class="wh-legend" id="wh-legend"></div>
     </section>
 
-    <section class="sheet-panel" aria-label="입고 · 출고 처리">
+    <section class="sheet-panel" id="wh-sec-io" aria-label="입고 · 출고 처리">
       <div class="sheet-top">
         <div>
           <h3>입고 · 출고 처리</h3>
@@ -369,12 +380,12 @@ body.view-plan .sheet-panel { padding: 12px 14px 12px; gap: 8px; }
       <p class="sum-hint">엑셀 첫 시트에서 머리글 <b>품번</b>(P/No)과 <b>수량</b>(상자 수)을 찾아 읽습니다. <b>일자</b>, <b>품명</b> 열은 있으면 함께 읽습니다. 내용은 이 브라우저에만 저장됩니다.</p>
     </section>
 
-    <section class="sheet-panel" aria-label="품번별 재고">
+    <section class="sheet-panel" id="wh-sec-stock" aria-label="품번별 재고">
       <div class="sheet-top"><h3>품번별 재고</h3></div>
       <div id="wh-stock"></div>
     </section>
 
-    <section class="sheet-panel" aria-label="입출고 처리 내역">
+    <section class="sheet-panel" id="wh-sec-log" aria-label="입출고 처리 내역">
       <div class="sheet-top"><h3>입출고 처리 내역</h3></div>
       <div id="wh-log"></div>
     </section>
@@ -675,6 +686,12 @@ function renderPlan() {
   // 축소한 표는 자리만 원래 크기로 남으므로, 보이는 높이만큼만 차지하게 합니다.
   host.style.overflow = shrink ? "hidden" : "";
   host.style.height = shrink ? Math.ceil(host.firstChild.offsetHeight * F.s) + "px" : "";
+  // 그래도 페이지가 넘치면(여백 차이) 넘친 만큼 표 높이를 줄여 페이지 스크롤을 없앱니다.
+  var over = document.documentElement.scrollHeight - window.innerHeight;
+  if (over > 0 && !panelEl.hidden) {
+    var k = shrink ? F.s : 1, box = host.firstChild, mh = parseFloat(box.style.maxHeight) - Math.ceil(over / k);
+    if (mh * k >= 200) { box.style.maxHeight = mh + "px"; if (shrink) host.style.height = Math.ceil(box.offsetHeight * F.s) + "px"; }
+  }
   if (!plan) return;
   var when = new Date(plan.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   setStatus(plan.file + " · " + (q ? shown + " / " : "") + plan.body.length + "행 · " + n + "열 · 불러온 시각 " + when);
@@ -1197,7 +1214,31 @@ function whApply(kind, rows, fileName) {
   var word = kind === "in" ? "입고" : "출고";
   whStatus(fileName + " · " + word + " " + done + " / " + req + " 상자 처리" + (done < req ? " · " + (req - done) + "상자는 " + (kind === "in" ? "빈 자리가 없어" : "재고가 없어") + " 처리하지 못했습니다 (아래 내역 확인)" : "") + (saved ? "" : " · 브라우저 저장 실패"));
 }
-function whStatus(msg) { document.getElementById("wh-status").textContent = msg; }
+function whStatus(msg) { document.getElementById("wh-status").textContent = msg; document.getElementById("wh-bar-status").textContent = msg; }
+// 물류창고의 작은 탭: 배치도(요약 숫자 + 도면) / 재고 / 입출고 처리(파일 넣기 + 내역). 위쪽 모양은 생산관리 화면과 같습니다.
+var whView = "map";
+try { var wv = localStorage.getItem("pl-whview"); if (wv === "map" || wv === "stock" || wv === "io") whView = wv; } catch (e) {}
+var whTabs = document.querySelectorAll("#wh-bar .subtab");
+function whApplyView() {
+  document.getElementById("wh-kpis").hidden = whView !== "map";
+  document.getElementById("wh-sec-map").hidden = whView !== "map";
+  document.getElementById("wh-sec-stock").hidden = whView !== "stock";
+  document.getElementById("wh-sec-io").hidden = whView !== "io";
+  document.getElementById("wh-sec-log").hidden = whView !== "io";
+  document.getElementById("wh-bar-status").hidden = whView === "io";
+  whTabs.forEach(function (b) { b.setAttribute("aria-selected", b.dataset.wview === whView ? "true" : "false"); });
+}
+whTabs.forEach(function (b) {
+  b.addEventListener("click", function () {
+    whView = b.dataset.wview;
+    try { localStorage.setItem("pl-whview", whView); } catch (e) {}
+    window.scrollTo(0, 0);
+    whApplyView();
+  });
+});
+["in", "out"].forEach(function (kind) {
+  document.getElementById("wh-bar-" + kind).addEventListener("click", function () { var i = document.getElementById("wh-file-" + kind); i.value = ""; i.click(); });
+});
 function whLoad(kind, file) {
   if (!window.XLSX) { whStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
   if (!/\.(xlsx|xlsm|xls|csv)$/i.test(file.name)) { whStatus("엑셀 파일만 넣을 수 있습니다: " + file.name); return; }
@@ -1258,7 +1299,7 @@ var grid = document.getElementById("grid");
 // 작은 탭: 가공·조립·출고 화면에서 요약 / 추이 그래프 / 계획표 중 하나만 보여 줍니다. 고른 탭은 세 화면이 함께 씁니다.
 var planView = "sum", curSec = null;
 try { var pv = localStorage.getItem("pl-view"); if (pv === "sum" || pv === "hist" || pv === "plan") planView = pv; } catch (e) {}
-var subtabs = document.querySelectorAll(".subtab");
+var subtabs = document.querySelectorAll("#subbar .subtab");
 subtabs.forEach(function (b) {
   b.addEventListener("click", function () {
     planView = b.dataset.view;
@@ -1290,7 +1331,7 @@ function show(sec) {
   syncFit();
   if (PLAN_SECTIONS[sec]) initSheet(sec);
   document.getElementById("wh-wrap").hidden = sec !== "warehouse";
-  if (sec === "warehouse") whRender();
+  if (sec === "warehouse") { whApplyView(); whRender(); if (!document.getElementById("wh-bar-status").textContent) whStatus(document.getElementById("wh-status").textContent); }
   grid.innerHTML = "";
   (isPlan && planView !== "sum" ? [] : SLOTS[sec]).forEach(function (s) {
     var d = document.createElement("div");
