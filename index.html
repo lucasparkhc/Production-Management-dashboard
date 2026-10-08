@@ -111,6 +111,42 @@ body.wide .wrap { max-width: none; }
 .sum-table tbody tr:hover td { background: var(--slot); }
 .sum-table tfoot td { position: sticky; bottom: 0; font-weight: 700; background: var(--accent-soft); border-top: 2px solid var(--accent); border-bottom: 0; }
 .sum-hint { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* ── 물류창고: 도면을 자체 좌표(1200×440)로 옮긴 배치도 + 입출고 처리 ── */
+#wh-wrap { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.wh-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.wh-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; min-width: 0; }
+.wh-kpi b { display: block; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.wh-kpi span { font-size: 12px; color: var(--muted); }
+.wh-kpi small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.wh-map { overflow-x: auto; }
+.wh-map svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--font-ui); }
+.wh-map .floor { fill: var(--slot); stroke: var(--fg); stroke-width: 2; }
+.wh-map .room2 { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 8 6; }
+.wh-map .lbl { fill: var(--fg); font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.wh-map .lbl.sm { font-size: 11px; font-weight: 500; fill: var(--muted); }
+.wh-map .lbl.on { fill: #fff; }
+.wh-map .lbl.dk { fill: #3b3200; }
+.wh-map .rack { fill: none; stroke: var(--fg); stroke-width: 1.5; }
+.wh-map .cell { fill: var(--surface); stroke: var(--line); stroke-width: 1; cursor: pointer; }
+.wh-map .cell.full { stroke: rgba(0, 0, 0, 0.35); }
+.wh-map .cell.dim { opacity: 0.18; }
+.wh-map .cell.sel { stroke: var(--fg); stroke-width: 2.5; }
+.wh-map .cell:hover { stroke: var(--accent); stroke-width: 2; }
+.wh-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.wh-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.25); }
+.wh-info { font-size: 13px; min-height: 20px; }
+.wh-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wh-drop { border: 1.5px dashed var(--line); border-radius: 6px; background: var(--slot); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.wh-drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+.wh-drop h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.wh-drop p { margin: 0; font-size: 13px; color: var(--muted); }
+.wh-ok { color: var(--accent); font-weight: 600; }
+.wh-part { color: #b26a00; font-weight: 600; }
+.wh-fail { color: #c62828; font-weight: 600; }
+.sum-table td.l, .sum-table th.l { text-align: left; }
+.sum-table td.wrapc { white-space: normal; text-align: left; font-family: var(--font-mono); font-size: 11px; max-width: 420px; }
+@media (max-width: 760px) { .wh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wh-io { grid-template-columns: 1fr; } }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
   .slot.wide { grid-column: 1 / -1; }
@@ -192,7 +228,7 @@ body.wide .wrap { max-width: none; }
         <h2>물류창고</h2>
         <p>창고의 재고와 입출고 흐름을 확인하는 화면입니다.</p>
       </div>
-      <span class="badge">내용 준비 중</span>
+      <span class="badge">엑셀 연동</span>
     </div>
   </section>
 
@@ -224,6 +260,64 @@ body.wide .wrap { max-width: none; }
     <div id="sheet-host"></div>
   </section>
 
+  <div id="wh-wrap" hidden>
+    <div class="wh-kpis" id="wh-kpis"></div>
+
+    <section class="sheet-panel" aria-label="창고 배치도">
+      <div class="sheet-top">
+        <div>
+          <h3>창고 배치도</h3>
+          <span class="sheet-status">랙 6개(A~F) · 랙마다 5칸 × 3단 = 단프라 15상자 · 총 90자리</span>
+        </div>
+        <div class="sheet-tools">
+          <input class="sheet-search" id="wh-search" type="search" placeholder="품번 찾기" aria-label="품번 찾기">
+        </div>
+      </div>
+      <div class="wh-map" id="wh-map"></div>
+      <div class="wh-info" id="wh-info"></div>
+      <div class="wh-legend" id="wh-legend"></div>
+    </section>
+
+    <section class="sheet-panel" aria-label="입고 · 출고 처리">
+      <div class="sheet-top">
+        <div>
+          <h3>입고 · 출고 처리</h3>
+          <span class="sheet-status" id="wh-status">엑셀 파일을 넣으면 선입선출(FIFO)로 배치도가 바뀝니다</span>
+        </div>
+        <div class="sheet-tools">
+          <button class="btn" id="wh-template" type="button">양식 받기</button>
+          <button class="btn" id="wh-undo" type="button">마지막 파일 되돌리기</button>
+          <button class="btn" id="wh-reset" type="button">창고 비우기</button>
+        </div>
+      </div>
+      <div class="wh-io">
+        <div class="wh-drop" id="wh-drop-in">
+          <h4>입고 파일</h4>
+          <p>입고된 단프라 상자를 빈 자리에 순서대로 배치합니다 (A랙 1칸 1단부터).</p>
+          <button class="btn primary" id="wh-btn-in" type="button">입고 엑셀 넣기</button>
+          <input type="file" id="wh-file-in" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+        </div>
+        <div class="wh-drop" id="wh-drop-out">
+          <h4>출고 파일</h4>
+          <p>같은 품번 중 가장 먼저 입고된 상자부터 빼냅니다.</p>
+          <button class="btn primary" id="wh-btn-out" type="button">출고 엑셀 넣기</button>
+          <input type="file" id="wh-file-out" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+        </div>
+      </div>
+      <p class="sum-hint">엑셀 첫 시트에서 머리글 <b>품번</b>(P/No)과 <b>수량</b>(상자 수)을 찾아 읽습니다. <b>일자</b>, <b>품명</b> 열은 있으면 함께 읽습니다. 내용은 이 브라우저에만 저장됩니다.</p>
+    </section>
+
+    <section class="sheet-panel" aria-label="품번별 재고">
+      <div class="sheet-top"><h3>품번별 재고</h3></div>
+      <div id="wh-stock"></div>
+    </section>
+
+    <section class="sheet-panel" aria-label="입출고 처리 내역">
+      <div class="sheet-top"><h3>입출고 처리 내역</h3></div>
+      <div id="wh-log"></div>
+    </section>
+  </div>
+
   <div class="grid" id="grid"></div>
 </main>
 </div>
@@ -250,14 +344,7 @@ var SLOTS = {
     ["요약 지표", "지연·보류 건수 등", ""],
     ["고객사별 현황", "납기 대응 상태 목록", "full"]
   ],
-  warehouse: [
-    ["요약 지표", "총 재고, 적치율 같은 핵심 숫자가 들어갈 자리", ""],
-    ["요약 지표", "오늘 입고·출고 건수 등", ""],
-    ["요약 지표", "부족·과잉 품목 수 등", ""],
-    ["재고 현황", "품목·위치별 재고가 들어갈 자리", "wide"],
-    ["입출고 흐름", "최근 입고·출고 내역", "tall"],
-    ["상세 목록", "품목 단위의 재고 표가 들어갈 자리", "full"]
-  ]
+  warehouse: []
 };
 // ── 계획표: Daily Plan 엑셀의 "Plan" 시트에서 섹션마다 정해진 열만 뽑아 보여 줍니다. ──
 // 세 섹션 모두 B, D, F 열은 고정이고, 그 뒤에 섹션별 열이 붙습니다. 파일 하나를 넣으면 세 섹션이 한꺼번에 채워집니다.
@@ -631,6 +718,231 @@ panelEl.addEventListener("drop", function (e) {
   if (f) loadFile(f);
 });
 
+// ── 물류창고 ──
+// 도면을 1200×440 좌표로 옮겼습니다. 랙 6개(A~F), 랙마다 5칸 × 3단 = 15상자. 화살표(동선)는 그리지 않습니다.
+// 배치 순서(FIFO): A랙 1칸 1단 → 2단 → 3단 → 2칸 … → F랙 5칸 3단. 출고는 같은 품번 중 입고일이 가장 이른 상자부터.
+var WH_KEY = "pl-wh1";
+var WH_RACKS = [["A", 50], ["B", 197], ["C", 251], ["D", 402], ["E", 456], ["F", 623]];
+var WH_BAYS = 5, WH_LEVELS = 3, WH_Y = 190, WH_CW = 18, WH_CH = 39;
+var WH_LOCS = [];
+WH_RACKS.forEach(function (r) {
+  for (var b = 1; b <= WH_BAYS; b++) for (var l = 1; l <= WH_LEVELS; l++) WH_LOCS.push(r[0] + "-" + b + "-" + l);
+});
+var wh = { slots: {}, log: [], seq: 1, undo: null };
+var whSel = null;
+try {
+  var whSaved = JSON.parse(localStorage.getItem(WH_KEY) || "null");
+  if (whSaved && whSaved.slots) wh = whSaved;
+} catch (e) {}
+function whSave() {
+  if (wh.log.length > 300) wh.log = wh.log.slice(0, 300);
+  try { localStorage.setItem(WH_KEY, JSON.stringify(wh)); return true; } catch (e) { return false; }
+}
+function whLocName(id) { var p = id.split("-"); return p[0] + "랙 " + p[1] + "칸 " + p[2] + "단"; }
+function whColor(pno) {
+  var h = 0;
+  for (var i = 0; i < pno.length; i++) h = (h * 31 + pno.charCodeAt(i)) % 360;
+  return "hsl(" + h + " 58% 52%)";
+}
+function whYmd(d) { var p = function (x) { return (x < 10 ? "0" : "") + x; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
+function whDate(v) {
+  if (typeof v === "number" && v > 20000 && v < 80000 && window.XLSX) {
+    var o = XLSX.SSF.parse_date_code(v);
+    if (o) return whYmd(new Date(o.y, o.m - 1, o.d));
+  }
+  var m = /(\d{4})\D{1,2}(\d{1,2})\D{1,2}(\d{1,2})/.exec(String(v == null ? "" : v));
+  if (m) return whYmd(new Date(+m[1], +m[2] - 1, +m[3]));
+  m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(v == null ? "" : v).trim());
+  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  return "";
+}
+
+function whSvg() {
+  var q = document.getElementById("wh-search").value.trim().toUpperCase();
+  var T = function (x, y, t, cls) { return '<text class="lbl' + (cls ? " " + cls : "") + '" x="' + x + '" y="' + y + '">' + esc(t) + "</text>"; };
+  var h = '<svg viewBox="0 0 1200 440" role="img" aria-label="물류창고 배치도">';
+  // 건물 외곽: 왼쪽 위로 튀어나온 구역(지게차 · 불량품)을 포함한 한 덩어리
+  h += '<path class="floor" d="M40 20H500V70H960V400H40Z"/>';
+  // 지게차 · 불량품
+  h += '<rect x="40" y="20" width="92" height="50" fill="#ffe94a" stroke="#8a7a00"/>' + T(86, 45, "지게차", "dk");
+  h += '<rect x="275" y="24" width="222" height="40" fill="#c0504d" stroke="#8c2f2c"/>' + T(386, 44, "불량품", "on");
+  // PC 2대
+  h += '<rect x="728" y="70" width="92" height="30" fill="#6f8f3a" stroke="#4d6626"/>' + T(774, 85, "출고 PC", "on");
+  h += '<rect x="820" y="70" width="93" height="30" fill="#6f8f3a" stroke="#4d6626"/>' + T(866, 85, "입고 PC", "on");
+  // 완제품 입고 구역
+  h += '<rect x="690" y="165" width="180" height="234" fill="#ffe94a" fill-opacity="0.22"/>';
+  h += '<rect x="745" y="315" width="115" height="72" fill="var(--surface)" stroke="var(--fg)" stroke-width="1.5"/>' + T(802, 343, "완제품") + T(802, 361, "입고");
+  // 문
+  h += '<rect x="36" y="70" width="8" height="87" fill="#d9534f"/>' + T(74, 113, "출고문", "sm");
+  h += '<rect x="956" y="308" width="8" height="84" fill="#d9534f"/>' + T(926, 350, "입고문", "sm");
+  h += '<rect x="400" y="396" width="99" height="8" fill="#d9534f"/>' + T(450, 418, "기타 출입구", "sm");
+  // 랙
+  WH_RACKS.forEach(function (r) {
+    var x0 = r[1];
+    h += T(x0 + 27, 176, r[0]);
+    for (var b = 1; b <= WH_BAYS; b++) for (var l = 1; l <= WH_LEVELS; l++) {
+      var id = r[0] + "-" + b + "-" + l, box = wh.slots[id];
+      var cls = "cell" + (box ? " full" : "") + (q && !(box && box.p.toUpperCase().indexOf(q) >= 0) ? " dim" : "") + (id === whSel ? " sel" : "");
+      h += '<rect class="' + cls + '" data-loc="' + id + '" x="' + (x0 + (l - 1) * WH_CW) + '" y="' + (WH_Y + (b - 1) * WH_CH) + '" width="' + WH_CW + '" height="' + WH_CH + '"' +
+        (box ? ' style="fill:' + whColor(box.p) + '"' : "") + "><title>" + esc(whLocName(id) + (box ? " · " + box.p + (box.n ? " " + box.n : "") + " · 입고 " + box.d : " · 비어 있음")) + "</title></rect>";
+    }
+    h += '<rect class="rack" x="' + x0 + '" y="' + WH_Y + '" width="' + WH_CW * WH_LEVELS + '" height="' + WH_CH * WH_BAYS + '"/>';
+  });
+  // 포장완료품 적재 창고 (빈 창고)
+  h += '<rect class="room2" x="1010" y="70" width="180" height="330"/>' + T(1100, 224, "포장완료품") + T(1100, 243, "적재 창고") + T(1100, 264, "준비 중", "sm");
+  return h + "</svg>";
+}
+function whRender() {
+  var used = 0, byP = {}, order = [], oldest = "";
+  WH_LOCS.forEach(function (id) {
+    var b = wh.slots[id];
+    if (!b) return;
+    used++;
+    var g = byP[b.p];
+    if (!g) { g = byP[b.p] = { p: b.p, n: b.n || "", c: 0, d: b.d, locs: [] }; order.push(g); }
+    g.c++; g.locs.push(id);
+    if (b.d < g.d) g.d = b.d;
+    if (!g.n && b.n) g.n = b.n;
+    if (!oldest || b.d < oldest) oldest = b.d;
+  });
+  var today = whYmd(new Date()), tin = 0, tout = 0;
+  wh.log.forEach(function (e) { if (whYmd(new Date(e.at)) === today) { if (e.k === "in") tin += e.done; else tout += e.done; } });
+  var total = WH_LOCS.length;
+  document.getElementById("wh-kpis").innerHTML =
+    '<div class="wh-kpi"><span>적재 상자</span><b>' + used + " <small>/ " + total + " (" + Math.round(used / total * 100) + '%)</small></b></div>' +
+    '<div class="wh-kpi"><span>빈 자리</span><b>' + (total - used) + '</b></div>' +
+    '<div class="wh-kpi"><span>오늘 입고 · 출고</span><b>' + tin + " <small>·</small> " + tout + ' <small>상자</small></b></div>' +
+    '<div class="wh-kpi"><span>가장 오래된 입고일</span><b>' + (oldest ? oldest.slice(5) : "–") + " <small>" + order.length + '개 품번</small></b></div>';
+  document.getElementById("wh-map").innerHTML = whSvg();
+  var leg = '<span><i style="background:var(--surface)"></i>빈 자리</span>';
+  order.forEach(function (g) { leg += '<span><i style="background:' + whColor(g.p) + '"></i>' + esc(g.p) + " (" + g.c + ")</span>"; });
+  document.getElementById("wh-legend").innerHTML = leg + "<span>칸 안의 세로 세 줄 = 1 · 2 · 3단</span>";
+  var info = document.getElementById("wh-info");
+  if (whSel) { var sb = wh.slots[whSel]; info.textContent = whLocName(whSel) + (sb ? " · " + sb.p + (sb.n ? " " + sb.n : "") + " · 입고일 " + sb.d : " · 비어 있음"); }
+  else info.textContent = "";
+
+  order.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.p < b.p ? -1 : 1; });
+  var st = order.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">품번</th><th class="l">품명</th><th>상자 수</th><th>가장 이른 입고일</th><th class="l">위치</th></tr></thead><tbody>' +
+    order.map(function (g) {
+      return '<tr><td class="l"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:' + whColor(g.p) + '"></i>' + esc(g.p) + '</td><td class="l">' + esc(g.n) + "</td><td>" + g.c + "</td><td>" + g.d + '</td><td class="wrapc">' + g.locs.join(", ") + "</td></tr>";
+    }).join("") + '</tbody><tfoot><tr><td class="l" colspan="2">합계</td><td>' + used + "</td><td></td><td></td></tr></tfoot></table></div>"
+    : '<p class="sum-hint">창고가 비어 있습니다. 입고 엑셀 파일을 넣어 주세요.</p>';
+  document.getElementById("wh-stock").innerHTML = st;
+
+  var lg = wh.log.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">처리 시각</th><th class="l">구분</th><th class="l">일자</th><th class="l">품번</th><th>요청</th><th>처리</th><th class="l">결과</th><th class="l">파일</th></tr></thead><tbody>' +
+    wh.log.map(function (e) {
+      var ok = e.done === e.qty, cls = ok ? "wh-ok" : e.done ? "wh-part" : "wh-fail";
+      var msg = ok ? "완료" : (e.done ? "일부만 " : "실패 ") + (e.k === "in" ? "(빈 자리 부족 " : "(재고 부족 ") + (e.qty - e.done) + ")";
+      return '<tr><td class="l">' + new Date(e.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) + '</td><td class="l">' + (e.k === "in" ? "입고" : "출고") + '</td><td class="l">' + esc(e.d) + '</td><td class="l">' + esc(e.p) + "</td><td>" + e.qty + "</td><td>" + e.done + '</td><td class="l ' + cls + '">' + msg + '</td><td class="l">' + esc(e.f) + "</td></tr>";
+    }).join("") + "</tbody></table></div>"
+    : '<p class="sum-hint">아직 처리한 입고 · 출고 파일이 없습니다.</p>';
+  document.getElementById("wh-log").innerHTML = lg;
+}
+
+// 엑셀 → [{d, p, n, qty}]. 처음 20행 안에서 품번 · 수량 머리글이 있는 행을 찾습니다.
+var WH_RE = { p: /품\s*번|p\s*\/?\s*no|part|품목\s*코드|item/i, qty: /수량|q'?ty|quantity|box|박스|상자|단프라/i, d: /일자|날짜|date|입고일|출고일/i, n: /품\s*명|name|desc|모델|model/i };
+function whParse(buf) {
+  var wb = XLSX.read(buf, { type: "array" }), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+  var hr = -1, col = {};
+  for (var r = 0; r < Math.min(rows.length, 20) && hr < 0; r++) {
+    var c = {};
+    rows[r].forEach(function (v, i) {
+      var t = String(v);
+      ["p", "qty", "d", "n"].forEach(function (k) { if (c[k] == null && WH_RE[k].test(t) && !Object.keys(c).some(function (o) { return c[o] === i; })) c[k] = i; });
+    });
+    if (c.p != null && c.qty != null) { hr = r; col = c; }
+  }
+  if (hr < 0) return null;
+  var out = [], today = whYmd(new Date());
+  for (r = hr + 1; r < rows.length; r++) {
+    var p = String(rows[r][col.p] == null ? "" : rows[r][col.p]).trim(), qty = Math.floor(Number(rows[r][col.qty]));
+    if (!p || !(qty > 0)) continue;
+    out.push({ p: p, qty: qty, d: (col.d != null && whDate(rows[r][col.d])) || today, n: col.n != null ? String(rows[r][col.n]).trim() : "" });
+  }
+  return out;
+}
+function whApply(kind, rows, fileName) {
+  wh.undo = { slots: JSON.parse(JSON.stringify(wh.slots)), seq: wh.seq, logLen: wh.log.length, f: fileName };
+  var at = Date.now(), entries = [], req = 0, done = 0;
+  rows = rows.map(function (x, i) { return [x, i]; }).sort(function (a, b) { return a[0].d < b[0].d ? -1 : a[0].d > b[0].d ? 1 : a[1] - b[1]; }).map(function (x) { return x[0]; });
+  rows.forEach(function (row) {
+    var n = 0, i;
+    if (kind === "in") {
+      for (i = 0; i < WH_LOCS.length && n < row.qty; i++) {
+        if (wh.slots[WH_LOCS[i]]) continue;
+        wh.slots[WH_LOCS[i]] = { p: row.p, n: row.n, d: row.d, q: wh.seq++ };
+        n++;
+      }
+    } else {
+      var key = row.p.toUpperCase();
+      var have = WH_LOCS.filter(function (id) { return wh.slots[id] && wh.slots[id].p.toUpperCase() === key; })
+        .sort(function (a, b) { var x = wh.slots[a], y = wh.slots[b]; return x.d < y.d ? -1 : x.d > y.d ? 1 : x.q - y.q; });
+      for (i = 0; i < have.length && n < row.qty; i++) { delete wh.slots[have[i]]; n++; }
+    }
+    req += row.qty; done += n;
+    entries.push({ at: at, k: kind, f: fileName, d: row.d, p: row.p, qty: row.qty, done: n });
+  });
+  wh.log = entries.concat(wh.log);
+  whSel = null;
+  var saved = whSave();
+  whRender();
+  var word = kind === "in" ? "입고" : "출고";
+  whStatus(fileName + " · " + word + " " + done + " / " + req + " 상자 처리" + (done < req ? " · " + (req - done) + "상자는 " + (kind === "in" ? "빈 자리가 없어" : "재고가 없어") + " 처리하지 못했습니다 (아래 내역 확인)" : "") + (saved ? "" : " · 브라우저 저장 실패"));
+}
+function whStatus(msg) { document.getElementById("wh-status").textContent = msg; }
+function whLoad(kind, file) {
+  if (!window.XLSX) { whStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
+  if (!/\.(xlsx|xlsm|xls|csv)$/i.test(file.name)) { whStatus("엑셀 파일만 넣을 수 있습니다: " + file.name); return; }
+  if (wh.log.some(function (e) { return e.f === file.name && e.k === kind; }) && !confirm("“" + file.name + "” 파일은 이미 한 번 처리했습니다. 다시 넣으면 수량이 한 번 더 반영됩니다. 계속할까요?")) return;
+  var fr = new FileReader();
+  fr.onerror = function () { whStatus("파일을 읽지 못했습니다: " + file.name); };
+  fr.onload = function () {
+    var rows = null;
+    try { rows = whParse(fr.result); } catch (e) { whStatus("파일을 읽지 못했습니다: " + file.name); return; }
+    if (!rows) { whStatus("머리글에서 ‘품번’과 ‘수량’ 열을 찾지 못했습니다: " + file.name + " (양식 받기 참고)"); return; }
+    if (!rows.length) { whStatus("처리할 행이 없습니다: " + file.name); return; }
+    whApply(kind, rows, file.name);
+  };
+  fr.readAsArrayBuffer(file);
+}
+["in", "out"].forEach(function (kind) {
+  var input = document.getElementById("wh-file-" + kind), zone = document.getElementById("wh-drop-" + kind);
+  document.getElementById("wh-btn-" + kind).addEventListener("click", function () { input.value = ""; input.click(); });
+  input.addEventListener("change", function () { if (input.files[0]) whLoad(kind, input.files[0]); });
+  ["dragenter", "dragover"].forEach(function (ev) { zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add("drag"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove("drag"); }); });
+  zone.addEventListener("drop", function (e) { var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) whLoad(kind, f); });
+});
+document.getElementById("wh-template").addEventListener("click", function () {
+  if (!window.XLSX) return;
+  var ws = XLSX.utils.aoa_to_sheet([["일자", "품번", "품명", "수량(상자)"]]);
+  ws["!cols"] = [{ wpx: 90 }, { wpx: 130 }, { wpx: 160 }, { wpx: 90 }];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "입출고");
+  XLSX.writeFile(wb, "물류창고_입출고_양식.xlsx");
+});
+document.getElementById("wh-undo").addEventListener("click", function () {
+  if (!wh.undo) { whStatus("되돌릴 파일이 없습니다."); return; }
+  var f = wh.undo.f;
+  wh.slots = wh.undo.slots; wh.seq = wh.undo.seq; wh.log = wh.log.slice(wh.log.length - wh.undo.logLen); wh.undo = null;
+  whSel = null; whSave(); whRender();
+  whStatus("되돌렸습니다: " + f);
+});
+document.getElementById("wh-reset").addEventListener("click", function () {
+  if (!confirm("창고 배치와 처리 내역을 모두 지웁니다. 계속할까요?")) return;
+  wh = { slots: {}, log: [], seq: 1, undo: null };
+  whSel = null; whSave(); whRender();
+  whStatus("창고를 비웠습니다.");
+});
+document.getElementById("wh-map").addEventListener("click", function (e) {
+  var id = e.target && e.target.getAttribute && e.target.getAttribute("data-loc");
+  if (!id) return;
+  whSel = whSel === id ? null : id;
+  whRender();
+});
+var whSearchTimer = null;
+document.getElementById("wh-search").addEventListener("input", function () { clearTimeout(whSearchTimer); whSearchTimer = setTimeout(whRender, 120); });
+
 var ORDER = ["machining", "assembly", "shipping", "warehouse"];
 var tabs = document.querySelectorAll(".tab");
 var grid = document.getElementById("grid");
@@ -650,6 +962,8 @@ function show(sec) {
   if (PLAN_SECTIONS[sec]) cur = sec;
   syncFit();
   if (PLAN_SECTIONS[sec]) initSheet(sec);
+  document.getElementById("wh-wrap").hidden = sec !== "warehouse";
+  if (sec === "warehouse") whRender();
   grid.innerHTML = "";
   SLOTS[sec].forEach(function (s) {
     var d = document.createElement("div");
