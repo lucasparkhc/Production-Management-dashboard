@@ -16,18 +16,19 @@
   --accent: #0f6e5c;
   --accent-soft: #dcefe9;
   --slot: #f8faf9;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
   --font-ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #101514; --surface: #171e1c; --line: #2b3633; --fg: #e6ecea; --muted: #94a39e;
-    --accent: #4fc2a8; --accent-soft: #1a332d; --slot: #131a18; color-scheme: dark;
+    --accent: #4fc2a8; --accent-soft: #1a332d; --slot: #131a18; --s1: #3987e5; --s2: #d95926; --s3: #199e70; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #101514; --surface: #171e1c; --line: #2b3633; --fg: #e6ecea; --muted: #94a39e;
-  --accent: #4fc2a8; --accent-soft: #1a332d; --slot: #131a18; color-scheme: dark;
+  --accent: #4fc2a8; --accent-soft: #1a332d; --slot: #131a18; --s1: #3987e5; --s2: #d95926; --s3: #199e70; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -148,6 +149,23 @@ body.wide .wrap { max-width: none; }
 .sum-table td.wrapc { white-space: normal; text-align: left; font-family: var(--font-mono); font-size: 11px; max-width: 420px; }
 .hist-table .up { color: #c62828; } .hist-table .dn { color: #1565c0; }
 .hist-table small { font-size: 11px; margin-left: 6px; font-weight: 500; }
+.hist-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.hist-chart { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 8px; background: var(--surface); }
+.hist-chart h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.hc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 18px; }
+.hc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+.hc-plot { position: relative; margin-top: 6px; }
+.hc-plot svg { display: block; width: 100%; height: 230px; font-family: var(--font-ui); }
+.hc-plot .grid { stroke: var(--line); stroke-width: 1; }
+.hc-plot .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.hc-plot .end { fill: var(--fg); font-size: 12px; font-weight: 600; }
+.hc-plot .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.hc-tip { position: absolute; top: 6px; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); z-index: 2; font-variant-numeric: tabular-nums; }
+.hc-tip b { font-weight: 600; }
+.hc-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.hist-select { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; }
+.hist-details { margin-top: 4px; }
+.hist-details summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0 8px; }
 .hist-del { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
 .hist-del:hover { color: #c62828; }
 @media (max-width: 760px) { .wh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wh-io { grid-template-columns: 1fr; } }
@@ -253,6 +271,8 @@ body.wide .wrap { max-width: none; }
         <span class="sheet-status" id="hist-status"></span>
       </div>
       <div class="sheet-tools">
+        <select class="hist-select" id="hist-year" aria-label="연도"></select>
+        <select class="hist-select" id="hist-month" aria-label="월"></select>
         <button class="btn" id="hist-export" type="button">기록 내보내기</button>
         <button class="btn" id="hist-import" type="button">기록 가져오기</button>
         <input type="file" id="hist-file" accept=".xlsx,.xls" hidden>
@@ -696,29 +716,129 @@ HIST_GRPS.forEach(function (g) {
     HIST_COLS[sec].push([g + "\nMust", function (r) { return r[g] ? r[g][0] : 0; }], [g + "\nD+0", function (r) { return r[g] ? r[g][1] : 0; }]);
   });
 });
-function histRender() {
-  var box = document.getElementById("hist-host"), k = HIST_SEC[cur], cols = HIST_COLS[cur];
-  if (!k) return;
-  document.getElementById("hist-title").textContent = "일자별 기록 · " + (cur === "machining" ? "전체 투입 본수" : cur === "assembly" ? "대물류 조립 수량 (D+0)" : "대물류 출고 수량 (D+0)");
-  var dates = Object.keys(hist).filter(function (d) { return hist[d][k]; }).sort().reverse();
-  document.getElementById("hist-status").textContent = dates.length ? dates.length + "일치 · 파일의 D+0 날짜 기준 · 이 브라우저에 저장 (계획표를 바꾸거나 비워도 남음)" : "";
-  if (!dates.length) { box.innerHTML = '<p class="sum-hint">엑셀 파일을 넣으면 그 파일의 D+0 날짜로 기록이 쌓입니다.</p>'; return; }
-  var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
-  var html = '<div class="sum-scroll"><table class="sum-table hist-table"><thead><tr><th class="k">일자 (D+0)</th>';
-  cols.forEach(function (c) { html += "<th>" + esc(c[0]) + "</th>"; });
-  html += "<th></th></tr></thead><tbody>";
-  dates.forEach(function (d, i) {
-    var r = hist[d][k], prev = dates[i + 1] ? hist[dates[i + 1]][k] : null;
-    var wd = "일월화수목금토".charAt(new Date(d + "T00:00:00").getDay());
-    html += '<tr><td class="k">' + d + " (" + wd + ")</td>";
-    cols.forEach(function (c) {
-      var v = c[1](r) || 0, df = prev ? v - (c[1](prev) || 0) : 0;
-      html += "<td" + (v ? "" : ' class="z"') + ">" + fmt(v) + (df ? '<small class="' + (df > 0 ? "up" : "dn") + '">' + (df > 0 ? "▲ " : "▼ ") + fmt(Math.abs(df)) + "</small>" : "") + "</td>";
-    });
-    html += '<td><button class="hist-del" type="button" data-date="' + d + '" title="이 날짜 기록 지우기" aria-label="' + d + ' 기록 지우기">×</button></td></tr>';
+// 연 · 월을 고르면 그 달의 일자별 추이를 선 그래프로 그립니다. 가로축은 1일~말일, 기록이 있는 날에만 점이 찍힙니다.
+var histYM = null, histTableOpen = false;
+function histSpecs() {
+  if (cur === "machining") return [{ title: "전체 투입 본수 (Circuit 합계)", series: [{ name: "Circuit 합계", color: "var(--s1)", get: function (r) { return r.c; } }] }];
+  var word = cur === "assembly" ? "조립" : "출고";
+  return [["D+0", 1], ["Must", 0]].map(function (t) {
+    return { title: "대물류 " + word + " 수량 · " + t[0], series: HIST_GRPS.map(function (g, gi) { return { name: g, color: "var(--s" + (gi + 1) + ")", get: function (r) { return r[g] ? r[g][t[1]] : 0; } }; }) };
   });
-  box.innerHTML = html + "</tbody></table></div>";
 }
+function histNice(v) {
+  if (!(v > 0)) return 4;
+  var p = Math.pow(10, Math.floor(Math.log(v) / Math.LN10)), n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 4 ? 4 : n <= 5 ? 5 : n <= 8 ? 8 : 10) * p;
+}
+function histFmt(v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); }
+function histDraw(el, spec, recs, y, mo) {
+  // recs: [{ day, r }] 오름차순
+  var W = Math.max(280, el.clientWidth || 560), H = 230, L = 54, R = spec.series.length > 1 ? 58 : 20, T = 16, B = 26;
+  var nd = new Date(y, mo, 0).getDate(), pw = W - L - R, ph = H - T - B, max = 0;
+  recs.forEach(function (o) { spec.series.forEach(function (s) { var v = s.get(o.r) || 0; if (v > max) max = v; }); });
+  max = histNice(max);
+  var X = function (d) { return L + (d - 1) * pw / (nd - 1); }, Y = function (v) { return T + ph - v / max * ph; };
+  var h = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(spec.title) + '">';
+  for (var g = 0; g <= 4; g++) {
+    var gv = max * g / 4;
+    h += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(gv) + '" y2="' + Y(gv) + '"/><text class="ax" text-anchor="end" x="' + (L - 8) + '" y="' + (Y(gv) + 4) + '">' + histFmt(gv) + "</text>";
+  }
+  var step = pw / (nd - 1) >= 22 ? 1 : pw / (nd - 1) >= 11 ? 2 : 5;
+  for (var d = 1; d <= nd; d++) if (d === 1 || d % step === 0) h += '<text class="ax" text-anchor="middle" x="' + X(d) + '" y="' + (H - 8) + '">' + d + "</text>";
+  h += '<line class="cross" x1="0" x2="0" y1="' + T + '" y2="' + (T + ph) + '" visibility="hidden"/>';
+  var ends = [];
+  spec.series.forEach(function (s) {
+    var pts = recs.map(function (o) { return [X(o.day), Y(s.get(o.r) || 0)]; });
+    if (pts.length > 1) h += '<polyline fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") + '"/>';
+    pts.forEach(function (p) { h += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" fill="' + s.color + '" stroke="var(--surface)" stroke-width="2"/>'; });
+    if (pts.length) ends.push({ x: pts[pts.length - 1][0], y: pts[pts.length - 1][1], t: spec.series.length > 1 ? s.name : histFmt(s.get(recs[recs.length - 1].r) || 0) });
+  });
+  // 끝점 이름표: 서로 겹치지 않게 위아래로 벌립니다.
+  ends.sort(function (a, b) { return a.y - b.y; });
+  ends.forEach(function (e, i) { e.ly = i && e.y - ends[i - 1].ly < 14 ? ends[i - 1].ly + 14 : e.y; });
+  ends.forEach(function (e) {
+    var right = e.x + 8 + e.t.length * 8 < W;
+    h += '<text class="end" x="' + (right ? e.x + 8 : e.x) + '" y="' + (right ? e.ly + 4 : e.y - 10) + '" text-anchor="' + (right ? "start" : "middle") + '">' + esc(e.t) + "</text>";
+  });
+  el.innerHTML = h + '</svg><div class="hc-tip" hidden></div>';
+  var svg = el.firstChild, tip = el.lastChild, cross = svg.querySelector(".cross");
+  var hide = function () { tip.hidden = true; cross.setAttribute("visibility", "hidden"); };
+  el.onpointerleave = hide;
+  el.onpointermove = function (e) {
+    if (!recs.length) return;
+    var box = svg.getBoundingClientRect(), px = (e.clientX - box.left) * W / box.width, best = recs[0];
+    recs.forEach(function (o) { if (Math.abs(X(o.day) - px) < Math.abs(X(best.day) - px)) best = o; });
+    var x = X(best.day), sx = x * box.width / W, p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = "<b>" + y + "-" + p2(mo) + "-" + p2(best.day) + "</b>" + spec.series.map(function (s) { return '<div><i style="background:' + s.color + '"></i>' + esc(s.name) + " " + histFmt(s.get(best.r) || 0) + "</div>"; }).join("");
+    tip.hidden = false;
+    tip.style.left = sx > box.width / 2 ? "" : sx + 12 + "px";
+    tip.style.right = sx > box.width / 2 ? box.width - sx + 12 + "px" : "";
+  };
+}
+function histRender() {
+  var box = document.getElementById("hist-host"), k = HIST_SEC[cur];
+  if (!k) return;
+  document.getElementById("hist-title").textContent = "일자별 추이 · " + (cur === "machining" ? "전체 투입 본수" : cur === "assembly" ? "대물류 조립 수량 (D+0)" : "대물류 출고 수량 (D+0)");
+  var all = Object.keys(hist).filter(function (d) { return hist[d][k]; }).sort();
+  // 연 · 월 선택: 처음에는 기록이 있는 가장 최근 달
+  var now = new Date(), last = all.length ? all[all.length - 1] : now.getFullYear() + "-" + (now.getMonth() < 9 ? "0" : "") + (now.getMonth() + 1);
+  if (!histYM) histYM = [+last.slice(0, 4), +last.slice(5, 7)];
+  var years = {}; years[histYM[0]] = 1; years[now.getFullYear()] = 1;
+  Object.keys(hist).forEach(function (d) { years[+d.slice(0, 4)] = 1; });
+  var ys = document.getElementById("hist-year"), ms = document.getElementById("hist-month"), mh = "";
+  ys.innerHTML = Object.keys(years).sort().map(function (y) { return '<option value="' + y + '"' + (+y === histYM[0] ? " selected" : "") + ">" + y + "년</option>"; }).join("");
+  for (var m = 1; m <= 12; m++) {
+    var pre = histYM[0] + "-" + (m < 10 ? "0" : "") + m, has = all.some(function (d) { return d.indexOf(pre) === 0; });
+    mh += '<option value="' + m + '"' + (m === histYM[1] ? " selected" : "") + ">" + m + "월" + (has ? " ●" : "") + "</option>";
+  }
+  ms.innerHTML = mh;
+  var ym = histYM[0] + "-" + (histYM[1] < 10 ? "0" : "") + histYM[1];
+  var dates = all.filter(function (d) { return d.indexOf(ym) === 0; });
+  var recs = dates.map(function (d) { return { day: +d.slice(8, 10), r: hist[d][k] }; });
+  document.getElementById("hist-status").textContent = "전체 " + all.length + "일치 중 " + histYM[0] + "년 " + histYM[1] + "월 " + dates.length + "일치 · 파일의 D+0 날짜 기준 · 이 브라우저에 저장 (계획표를 바꾸거나 비워도 남음)";
+  var specs = histSpecs(), html = '<div class="hist-charts">';
+  specs.forEach(function (sp) {
+    html += '<div class="hist-chart"><h4>' + esc(sp.title) + '</h4><div class="hc-legend">' + (sp.series.length > 1 ? sp.series.map(function (s) { return '<span><i style="background:' + s.color + '"></i>' + esc(s.name) + "</span>"; }).join("") : "") + '</div><div class="hc-plot"></div></div>';
+  });
+  html += "</div>";
+  if (!dates.length) html += '<p class="sum-hint">' + histYM[0] + "년 " + histYM[1] + "월에는 기록이 없습니다. 엑셀 파일을 넣으면 그 파일의 D+0 날짜로 점이 찍힙니다.</p>";
+  else if (dates.length === 1) html += '<p class="sum-hint">이 달의 기록이 하루뿐이라 점 하나만 보입니다. 파일을 넣을 때마다 점이 늘어나 선으로 이어집니다.</p>';
+  // 표로 보기 (같은 달, 최근 날짜가 위)
+  if (dates.length) {
+    var cols = HIST_COLS[cur], rev = dates.slice().reverse();
+    html += '<details class="hist-details"' + (histTableOpen ? " open" : "") + '><summary>표로 보기</summary><div class="sum-scroll"><table class="sum-table hist-table"><thead><tr><th class="k">일자 (D+0)</th>';
+    cols.forEach(function (c) { html += "<th>" + esc(c[0]) + "</th>"; });
+    html += "<th></th></tr></thead><tbody>";
+    rev.forEach(function (d) {
+      var r = hist[d][k], pi = all.indexOf(d) - 1, prev = pi >= 0 ? hist[all[pi]][k] : null;
+      var wd = "일월화수목금토".charAt(new Date(d + "T00:00:00").getDay());
+      html += '<tr><td class="k">' + d + " (" + wd + ")</td>";
+      cols.forEach(function (c) {
+        var v = c[1](r) || 0, df = prev ? v - (c[1](prev) || 0) : 0;
+        html += "<td" + (v ? "" : ' class="z"') + ">" + histFmt(v) + (df ? '<small class="' + (df > 0 ? "up" : "dn") + '">' + (df > 0 ? "▲ " : "▼ ") + histFmt(Math.abs(df)) + "</small>" : "") + "</td>";
+      });
+      html += '<td><button class="hist-del" type="button" data-date="' + d + '" title="이 날짜 기록 지우기" aria-label="' + d + ' 기록 지우기">×</button></td></tr>';
+    });
+    html += "</tbody></table></div></details>";
+  }
+  box.innerHTML = html;
+  var plots = box.querySelectorAll(".hc-plot");
+  specs.forEach(function (sp, i) { histDraw(plots[i], sp, recs, histYM[0], histYM[1]); });
+  var det = box.querySelector(".hist-details");
+  if (det) det.addEventListener("toggle", function () { histTableOpen = det.open; });
+}
+["hist-year", "hist-month"].forEach(function (id) {
+  document.getElementById(id).addEventListener("change", function () {
+    histYM = [+document.getElementById("hist-year").value, +document.getElementById("hist-month").value];
+    histRender();
+  });
+});
+var histTimer = null;
+window.addEventListener("resize", function () {
+  clearTimeout(histTimer);
+  histTimer = setTimeout(function () { if (cur && !document.getElementById("hist-panel").hidden) histRender(); }, 200);
+});
 // 내보내기 · 가져오기: 한 줄에 하루. 다른 PC로 옮기거나 백업할 때 씁니다.
 var HIST_HEAD = ["일자", "가공 Circuit 합계"];
 ["조립", "출고"].forEach(function (w) { HIST_GRPS.forEach(function (g) { HIST_HEAD.push(w + " " + g + " Must", w + " " + g + " D+0"); }); });
@@ -755,7 +875,7 @@ function histImport(file) {
         });
         n++;
       });
-      histSave(); histRender();
+      histYM = null; histSave(); histRender();
       st.textContent = n + "일치 기록을 가져왔습니다 (같은 날짜는 파일 값으로 바뀜): " + file.name;
     } catch (e) { st.textContent = "파일을 읽지 못했습니다: " + file.name; }
   };
@@ -813,6 +933,7 @@ function loadFile(file) {
         if (empty) { setStatus("Plan 시트 8행 아래에 가져올 데이터가 없습니다: " + file.name); return; }
         plans = next;
         Object.keys(plans).forEach(function (sec) { histRecord(sec, plans[sec], true); });
+        histYM = null;
         plan = plans[cur];
         searchEl.value = "";
         renderPlan();
