@@ -123,7 +123,7 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .wh-kpi span { font-size: 12px; color: var(--muted); }
 .wh-kpi small { font-size: 13px; font-weight: 500; color: var(--muted); }
 .wh-map { overflow-x: auto; }
-.wh-map svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--font-ui); }
+.wh-map svg { display: block; width: 100%; min-width: 980px; height: auto; font-family: var(--font-ui); }
 .wh-map .floor { fill: var(--slot); stroke: var(--fg); stroke-width: 2; }
 .wh-map .room2 { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 8 6; }
 .wh-map .lbl { fill: var(--fg); font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
@@ -139,6 +139,8 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .wh-map .cell.full { stroke: rgba(0, 0, 0, 0.35); }
 .wh-map .cell.dim { opacity: 0.18; }
 .wh-map .cell.sel { stroke: var(--fg); stroke-width: 2.5; }
+.wh-map .cell.stage { cursor: default; }
+.wh-map .cell.stage:hover { stroke: var(--line); stroke-width: 1; }
 .wh-map .cell:hover { stroke: var(--accent); stroke-width: 2; }
 .wh-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
 .wh-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.25); }
@@ -1052,12 +1054,13 @@ panelEl.addEventListener("drop", function (e) {
 });
 
 // ── 물류창고 ──
-// 도면을 1200×440 좌표로 옮겼습니다. 라인(랙) 6개(A~F), 라인마다 15자리. 화살표(동선)는 그리지 않습니다.
+// 도면을 1560×440 좌표로 옮겼습니다 (왼쪽 영업창고 + 오른쪽 포장완료품 적재 창고). 라인(랙) 6개(A~F), 라인마다 15자리. 화살표(동선)는 그리지 않습니다.
 // 자리 번호: 라인마다 그림의 오른쪽 아래가 1번 → 왼쪽으로 2, 3번 → 윗줄 오른쪽부터 4, 5, 6번 … → 왼쪽 위가 15번.
 // 라인 하나에는 한 품목만 둡니다. 입고는 그 품목 라인의 가장 작은 빈 번호에, 출고는 1번부터 꺼내고 남은 상자는 1번부터 다시 채웁니다.
 // 라인에 못 들어간 상자는 포장완료품 적재 창고에 그대로 있는 것으로 봅니다 (대시보드에서는 따로 세지 않음).
 var WH_KEY = "pl-wh1";
 var WH_RACKS = [["A", 50], ["B", 197], ["C", 251], ["D", 402], ["E", 456], ["F", 623]];
+var WH_STAGE = [["a", 1026], ["b", 1080], ["c", 1158], ["d", 1212], ["e", 1290], ["f", 1344], ["g", 1422], ["h", 1476]];   // 포장완료품 적재 창고의 라인
 var WH_ROWS = 5, WH_PER = 3, WH_N = 15, WH_Y = 190, WH_CW = 18, WH_CH = 39;
 var WH_LOCS = [];
 WH_RACKS.forEach(function (r) { for (var n = 1; n <= WH_N; n++) WH_LOCS.push(r[0] + "-" + n); });
@@ -1123,7 +1126,7 @@ function whDate(v) {
 function whSvg() {
   var q = document.getElementById("wh-search").value.trim().toUpperCase();
   var T = function (x, y, t, cls) { return '<text class="lbl' + (cls ? " " + cls : "") + '" x="' + x + '" y="' + y + '">' + esc(t) + "</text>"; };
-  var h = '<svg viewBox="0 0 1200 440" role="img" aria-label="물류창고 배치도">';
+  var h = '<svg viewBox="0 0 1560 440" role="img" aria-label="물류창고 배치도">';
   // 건물 외곽: 왼쪽 위로 튀어나온 구역(지게차 · 불량품)을 포함한 한 덩어리
   h += '<path class="floor" d="M40 20H500V70H960V400H40Z"/>';
   // 지게차 · 불량품
@@ -1155,7 +1158,13 @@ function whSvg() {
     h += '<rect class="rack" x="' + x0 + '" y="' + WH_Y + '" width="' + WH_CW * WH_PER + '" height="' + WH_CH * WH_ROWS + '"/>';
   });
   // 포장완료품 적재 창고 (빈 창고)
-  h += '<rect class="room2" x="1010" y="70" width="180" height="330"/>' + T(1100, 224, "포장완료품") + T(1100, 243, "적재 창고") + T(1100, 264, "준비 중", "sm");
+  // 영업창고 라인과 같은 모양(15자리)의 라인 8개를 소문자 a~h로, 두 줄씩 붙여서(ab · cd · ef · gh) 놓습니다. 아직 재고는 세지 않습니다.
+  h += '<rect class="room2" x="1010" y="70" width="536" height="330"/>' + T(1278, 112, "포장완료품 적재 창고");
+  WH_STAGE.forEach(function (r) {
+    h += T(r[1] + 27, 176, r[0]);
+    for (var i = 0; i < WH_N; i++) h += '<rect class="cell stage" x="' + (r[1] + (i % WH_PER) * WH_CW) + '" y="' + (WH_Y + Math.floor(i / WH_PER) * WH_CH) + '" width="' + WH_CW + '" height="' + WH_CH + '"/>';
+    h += '<rect class="rack" x="' + r[1] + '" y="' + WH_Y + '" width="' + WH_CW * WH_PER + '" height="' + WH_CH * WH_ROWS + '"/>';
+  });
   return h + "</svg>";
 }
 function whRender() {
