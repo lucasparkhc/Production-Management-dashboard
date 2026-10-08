@@ -721,7 +721,7 @@ var histYM = null, histTableOpen = false;
 function histSpecs() {
   if (cur === "machining") return [{ title: "전체 투입 본수 (Circuit 합계)", series: [{ name: "Circuit 합계", color: "var(--s1)", get: function (r) { return r.c; } }] }];
   var word = cur === "assembly" ? "조립" : "출고";
-  return [["D+0", 1], ["Must", 0]].map(function (t) {
+  return [["D+0", 1]].map(function (t) {
     return { title: "대물류 " + word + " 수량 · " + t[0], series: HIST_GRPS.map(function (g, gi) { return { name: g, color: "var(--s" + (gi + 1) + ")", get: function (r) { return r[g] ? r[g][t[1]] : 0; } }; }) };
   });
 }
