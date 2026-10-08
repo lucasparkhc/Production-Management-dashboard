@@ -146,6 +146,10 @@ body.wide .wrap { max-width: none; }
 .wh-fail { color: #c62828; font-weight: 600; }
 .sum-table td.l, .sum-table th.l { text-align: left; }
 .sum-table td.wrapc { white-space: normal; text-align: left; font-family: var(--font-mono); font-size: 11px; max-width: 420px; }
+.hist-table .up { color: #c62828; } .hist-table .dn { color: #1565c0; }
+.hist-table small { font-size: 11px; margin-left: 6px; font-weight: 500; }
+.hist-del { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.hist-del:hover { color: #c62828; }
 @media (max-width: 760px) { .wh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wh-io { grid-template-columns: 1fr; } }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
@@ -240,6 +244,21 @@ body.wide .wrap { max-width: none; }
       </div>
     </div>
     <div id="sum-host"></div>
+  </section>
+
+  <section class="sheet-panel" id="hist-panel" hidden aria-label="일자별 기록">
+    <div class="sheet-top">
+      <div>
+        <h3 id="hist-title">일자별 기록</h3>
+        <span class="sheet-status" id="hist-status"></span>
+      </div>
+      <div class="sheet-tools">
+        <button class="btn" id="hist-export" type="button">기록 내보내기</button>
+        <button class="btn" id="hist-import" type="button">기록 가져오기</button>
+        <input type="file" id="hist-file" accept=".xlsx,.xls" hidden>
+      </div>
+    </div>
+    <div id="hist-host"></div>
   </section>
 
   <section class="sheet-panel" id="sheet-panel" hidden aria-label="계획표">
@@ -475,6 +494,8 @@ function renderSummary() {
     g.n++; items++;
     cols.forEach(function (col, j) { var v = num(d[col.i]); if (v != null && isFinite(v)) { g.v[j] += v; tot[j] += v; } });
   });
+  // 대물류(MAIN · FRONT · FLOOR)를 맨 위에, 나머지는 파일에 나온 순서대로.
+  groups = groups.map(function (g, i) { return [g, i]; }).sort(function (a, b) { return histRank(a[0].grp) - histRank(b[0].grp) || a[1] - b[1]; }).map(function (x) { return x[0]; });
   var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
   var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
   var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="g">Grp. Name</th>';
@@ -553,6 +574,7 @@ function projectPlan(d, sec) {
 
 function renderPlan() {
   renderSummary();
+  histRender();
   var P = plan || PLAN_TEMPLATE;
   if (!P) { host.innerHTML = ""; return; }
   var n = P.cols.length, h = P.head.length, i, r, c;
@@ -612,11 +634,150 @@ function renderPlan() {
   var when = new Date(plan.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
   setStatus(plan.file + " · " + (q ? shown + " / " : "") + plan.body.length + "행 · " + n + "열 · 불러온 시각 " + when);
 }
+// ── 일자별 기록: 파일의 D+0 날짜(계획 수립일)마다 핵심 수량을 따로 남겨 둡니다. 계획표를 새 파일로 바꾸거나 비워도 지워지지 않습니다. ──
+//   가공: Circuit 합계(전체 투입 본수).  조립 · 출고: 대물류 MAIN · FRONT · FLOOR의 D+0 수량(Must 열, D+0 열).
+//   hist["2026-07-24"] = { m: { c: 452350 }, a: { MAIN: [must, d0], FRONT: […], FLOOR: […] }, s: { … } }
+var HIST_KEY = "pl-hist1", HIST_GRPS = ["MAIN", "FRONT", "FLOOR"];
+var HIST_SEC = { machining: "m", assembly: "a", shipping: "s" };
+var hist = {};
+try { hist = JSON.parse(localStorage.getItem(HIST_KEY) || "{}") || {}; } catch (e) { hist = {}; }
+function histSave() { try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)); return true; } catch (e) { return false; } }
+function histRank(grp) { var i = HIST_GRPS.indexOf(String(grp).trim().toUpperCase()); return i < 0 ? HIST_GRPS.length : i; }
+function histD0Cols(P, from, to) {
+  var out = [];
+  for (var c = from; c < to; c++) if (String(txt(P.head[1][c])).replace(/\s/g, "").toUpperCase() === "D+0") out.push(c);
+  return out;
+}
+// D+0 날짜: 머리글에는 월/일만 있으므로 연도는 파일 이름(YYMMDD)에서, 없으면 불러온 시각에 가장 가까운 해로 정합니다.
+function histDate(P) {
+  var c = histD0Cols(P, PIN, P.cols.length)[0];
+  if (c == null) return null;
+  var m = /(\d{1,2})\s*[\/.\-]\s*(\d{1,2})/.exec(String(txt(P.head[2][c])));
+  if (!m) return null;
+  var mm = +m[1], dd = +m[2], p = function (x) { return (x < 10 ? "0" : "") + x; }, year = null;
+  var re = /(\d{2})(\d{2})(\d{2})/g, f;
+  while ((f = re.exec(String(P.file || "")))) if (+f[2] === mm && +f[3] === dd) { year = 2000 + +f[1]; break; }
+  if (year == null) {
+    var at = P.at || Date.now(), y0 = new Date(at).getFullYear(), best = Infinity;
+    [y0 - 1, y0, y0 + 1].forEach(function (y) { var gap = Math.abs(new Date(y, mm - 1, dd).getTime() - at); if (gap < best) { best = gap; year = y; } });
+  }
+  return year + "-" + p(mm) + "-" + p(dd);
+}
+function histExtract(sec, P) {
+  var rows = P.body.filter(function (d) { var pno = txt(d[2]); return pno !== "" && txt(d[1]) !== "" && !/^(↑|∑+)$/.test(pno); });
+  var add = function (rs, c) { var t = 0; rs.forEach(function (d) { var v = num(d[c]); if (v != null && isFinite(v)) t += v; }); return t; };
+  if (sec === "machining") return { c: add(rows, 6) };
+  var end = PIN + 1;
+  while (end < P.cols.length && txt(P.head[0][end]) === "") end++;
+  var must = null, d0 = null, out = {};
+  histD0Cols(P, PIN, end).forEach(function (c) { if (/must/i.test(String(txt(P.head[3][c])))) must = c; else if (d0 == null) d0 = c; });
+  HIST_GRPS.forEach(function (g) {
+    var rs = rows.filter(function (d) { return String(txt(d[1])).trim().toUpperCase() === g; });
+    out[g] = [must != null ? add(rs, must) : 0, d0 != null ? add(rs, d0) : 0];
+  });
+  return out;
+}
+function histRecord(sec, P, overwrite) {
+  if (!P || !P.body || !P.body.length || !P.head || P.head.length < 4) return;
+  var date = histDate(P), k = HIST_SEC[sec];
+  if (!date) return;
+  var rec = hist[date] || (hist[date] = {});
+  if (rec[k] && !overwrite) return;
+  rec[k] = histExtract(sec, P);
+  rec.f = P.file;
+  histSave();
+}
+var HIST_COLS = {
+  machining: [["투입 본수\n(Circuit 합계)", function (r) { return r.c; }]],
+  assembly: [], shipping: []
+};
+HIST_GRPS.forEach(function (g) {
+  ["assembly", "shipping"].forEach(function (sec) {
+    HIST_COLS[sec].push([g + "\nMust", function (r) { return r[g] ? r[g][0] : 0; }], [g + "\nD+0", function (r) { return r[g] ? r[g][1] : 0; }]);
+  });
+});
+function histRender() {
+  var box = document.getElementById("hist-host"), k = HIST_SEC[cur], cols = HIST_COLS[cur];
+  if (!k) return;
+  document.getElementById("hist-title").textContent = "일자별 기록 · " + (cur === "machining" ? "전체 투입 본수" : cur === "assembly" ? "대물류 조립 수량 (D+0)" : "대물류 출고 수량 (D+0)");
+  var dates = Object.keys(hist).filter(function (d) { return hist[d][k]; }).sort().reverse();
+  document.getElementById("hist-status").textContent = dates.length ? dates.length + "일치 · 파일의 D+0 날짜 기준 · 이 브라우저에 저장 (계획표를 바꾸거나 비워도 남음)" : "";
+  if (!dates.length) { box.innerHTML = '<p class="sum-hint">엑셀 파일을 넣으면 그 파일의 D+0 날짜로 기록이 쌓입니다.</p>'; return; }
+  var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
+  var html = '<div class="sum-scroll"><table class="sum-table hist-table"><thead><tr><th class="k">일자 (D+0)</th>';
+  cols.forEach(function (c) { html += "<th>" + esc(c[0]) + "</th>"; });
+  html += "<th></th></tr></thead><tbody>";
+  dates.forEach(function (d, i) {
+    var r = hist[d][k], prev = dates[i + 1] ? hist[dates[i + 1]][k] : null;
+    var wd = "일월화수목금토".charAt(new Date(d + "T00:00:00").getDay());
+    html += '<tr><td class="k">' + d + " (" + wd + ")</td>";
+    cols.forEach(function (c) {
+      var v = c[1](r) || 0, df = prev ? v - (c[1](prev) || 0) : 0;
+      html += "<td" + (v ? "" : ' class="z"') + ">" + fmt(v) + (df ? '<small class="' + (df > 0 ? "up" : "dn") + '">' + (df > 0 ? "▲ " : "▼ ") + fmt(Math.abs(df)) + "</small>" : "") + "</td>";
+    });
+    html += '<td><button class="hist-del" type="button" data-date="' + d + '" title="이 날짜 기록 지우기" aria-label="' + d + ' 기록 지우기">×</button></td></tr>';
+  });
+  box.innerHTML = html + "</tbody></table></div>";
+}
+// 내보내기 · 가져오기: 한 줄에 하루. 다른 PC로 옮기거나 백업할 때 씁니다.
+var HIST_HEAD = ["일자", "가공 Circuit 합계"];
+["조립", "출고"].forEach(function (w) { HIST_GRPS.forEach(function (g) { HIST_HEAD.push(w + " " + g + " Must", w + " " + g + " D+0"); }); });
+function histExport() {
+  var dates = Object.keys(hist).sort();
+  if (!dates.length || !window.XLSX) return;
+  var aoa = [HIST_HEAD].concat(dates.map(function (d) {
+    var r = hist[d], row = [d, r.m ? r.m.c : ""];
+    ["a", "s"].forEach(function (k) { HIST_GRPS.forEach(function (g) { var v = r[k] && r[k][g]; row.push(v ? v[0] : "", v ? v[1] : ""); }); });
+    return row;
+  }));
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = HIST_HEAD.map(function (_, i) { return { wpx: i ? 120 : 90 }; });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "일자별 기록");
+  XLSX.writeFile(wb, "생산관리_일자별기록_" + dates[dates.length - 1].replace(/-/g, "") + ".xlsx");
+}
+function histImport(file) {
+  var st = document.getElementById("hist-status"), fr = new FileReader();
+  fr.onload = function () {
+    try {
+      var wb = XLSX.read(fr.result, { type: "array" }), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
+      if (!rows.length || String(rows[0][0]).trim() !== HIST_HEAD[0] || rows[0].length < HIST_HEAD.length) { st.textContent = "기록 내보내기로 만든 파일이 아닙니다: " + file.name; return; }
+      var n = 0, has = function (v) { return v !== "" && v != null && isFinite(Number(v)); };
+      rows.slice(1).forEach(function (row) {
+        var d = /^\d{4}-\d{2}-\d{2}$/.test(String(row[0]).trim()) ? String(row[0]).trim() : "";
+        if (!d) return;
+        var rec = hist[d] || (hist[d] = {});
+        if (has(row[1])) rec.m = { c: Number(row[1]) };
+        ["a", "s"].forEach(function (k, ki) {
+          var base = 2 + ki * HIST_GRPS.length * 2, o = {}, any = false;
+          HIST_GRPS.forEach(function (g, gi) { var a = row[base + gi * 2], b = row[base + gi * 2 + 1]; if (has(a) || has(b)) any = true; o[g] = [Number(a) || 0, Number(b) || 0]; });
+          if (any) rec[k] = o;
+        });
+        n++;
+      });
+      histSave(); histRender();
+      st.textContent = n + "일치 기록을 가져왔습니다 (같은 날짜는 파일 값으로 바뀜): " + file.name;
+    } catch (e) { st.textContent = "파일을 읽지 못했습니다: " + file.name; }
+  };
+  fr.readAsArrayBuffer(file);
+}
+document.getElementById("hist-export").addEventListener("click", histExport);
+document.getElementById("hist-import").addEventListener("click", function () { var i = document.getElementById("hist-file"); i.value = ""; i.click(); });
+document.getElementById("hist-file").addEventListener("change", function () { if (this.files[0]) histImport(this.files[0]); });
+document.getElementById("hist-host").addEventListener("click", function (e) {
+  var d = e.target && e.target.getAttribute && e.target.getAttribute("data-date"), k = HIST_SEC[cur];
+  if (!d || !hist[d] || !confirm(d + " 기록을 이 화면(" + PLAN_SECTIONS[cur].title.replace(" 계획표", "") + ")에서 지웁니다. 계속할까요?")) return;
+  delete hist[d][k];
+  if (!hist[d].m && !hist[d].a && !hist[d].s) delete hist[d];
+  histSave(); histRender();
+});
+
 function loadStored(sec) {
   if (sec in plans) return;
   var d = null;
   try { d = JSON.parse(localStorage.getItem(planKey(sec)) || "null"); } catch (e) {}
   plans[sec] = d && d.head && d.body && d.cols ? projectPlan(d, sec) : null;
+  histRecord(sec, plans[sec], false);   // 이미 불러와 둔 파일도 기록에 넣습니다 (있는 날짜는 건드리지 않음)
 }
 // 섹션을 바꿀 때마다 불립니다.
 function initSheet(sec) {
@@ -651,6 +812,7 @@ function loadFile(file) {
         });
         if (empty) { setStatus("Plan 시트 8행 아래에 가져올 데이터가 없습니다: " + file.name); return; }
         plans = next;
+        Object.keys(plans).forEach(function (sec) { histRecord(sec, plans[sec], true); });
         plan = plans[cur];
         searchEl.value = "";
         renderPlan();
@@ -959,6 +1121,7 @@ function show(sec) {
   var sp = document.getElementById("sheet-panel");
   sp.hidden = !PLAN_SECTIONS[sec];
   document.getElementById("sum-panel").hidden = !PLAN_SECTIONS[sec];
+  document.getElementById("hist-panel").hidden = !PLAN_SECTIONS[sec];
   if (PLAN_SECTIONS[sec]) cur = sec;
   syncFit();
   if (PLAN_SECTIONS[sec]) initSheet(sec);
@@ -989,6 +1152,7 @@ tabs.forEach(function (t, i) {
   });
 });
 
+Object.keys(PLAN_SECTIONS).forEach(loadStored);
 var start = location.hash.slice(1);
 if (!start) { try { start = localStorage.getItem("pl-sec") || ""; } catch (e) {} }
 show(start);
