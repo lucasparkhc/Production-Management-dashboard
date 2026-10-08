@@ -132,8 +132,6 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .wh-map .lbl.dk { fill: #3b3200; }
 .wh-map .rack { fill: none; stroke: var(--fg); stroke-width: 1.5; }
 .wh-map .cell { fill: var(--surface); stroke: var(--line); stroke-width: 1; cursor: pointer; }
-.wh-map .num { fill: var(--muted); font-size: 9px; text-anchor: middle; dominant-baseline: central; pointer-events: none; font-variant-numeric: tabular-nums; }
-.wh-map .num.on { fill: #fff; font-weight: 600; }
 .wh-lines { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .wh-lines label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
 .wh-lines input { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; min-width: 0; width: 100%; }
@@ -346,7 +344,7 @@ body.view-plan main { padding-bottom: 14px; }
       <div class="sheet-top">
         <div>
           <h3>창고 배치도</h3>
-          <span class="sheet-status">라인 6개(A~F) · 라인마다 한 품목, 단프라 15상자 · 1번(오른쪽 아래)부터 출고 · 총 90자리</span>
+          <span class="sheet-status">라인 6개(A~F) · 라인마다 한 품목, 단프라 15상자 · 총 90자리</span>
         </div>
         <div class="sheet-tools">
           <input class="sheet-search" id="wh-search" type="search" placeholder="품번 찾기" aria-label="품번 찾기">
@@ -1153,7 +1151,6 @@ function whSvg() {
       var cls = "cell" + (box ? " full" : "") + (q && !(box && box.p.toUpperCase().indexOf(q) >= 0) ? " dim" : "") + (id === whSel ? " sel" : "");
       h += '<rect class="' + cls + '" data-loc="' + id + '" x="' + cx + '" y="' + cy + '" width="' + WH_CW + '" height="' + WH_CH + '"' +
         (box ? ' style="fill:' + whColor(box.p) + '"' : "") + "><title>" + esc(whLocName(id) + (box ? " · " + box.p + (box.n ? " " + box.n : "") + " · 입고 " + box.d : " · 비어 있음")) + "</title></rect>";
-      h += '<text class="num' + (box ? " on" : "") + '" x="' + (cx + WH_CW / 2) + '" y="' + (cy + WH_CH / 2) + '">' + n + "</text>";
     }
     h += '<rect class="rack" x="' + x0 + '" y="' + WH_Y + '" width="' + WH_CW * WH_PER + '" height="' + WH_CH * WH_ROWS + '"/>';
   });
@@ -1185,7 +1182,7 @@ function whRender() {
   document.getElementById("wh-map").innerHTML = whSvg();
   var leg = '<span><i style="background:var(--surface)"></i>빈 자리</span>';
   order.forEach(function (g) { leg += '<span><i style="background:' + whColor(g.p) + '"></i>' + esc(g.p) + " (" + g.c + ")</span>"; });
-  document.getElementById("wh-legend").innerHTML = leg + "<span>자리 번호: 오른쪽 아래 1번 → 왼쪽 위 15번</span>";
+  document.getElementById("wh-legend").innerHTML = leg;
   var lh = "";
   WH_RACKS.forEach(function (r) {
     var held = whLineBoxes(r[0]), auto = !wh.lines[r[0]] && held.length ? held[0].p : "";
