@@ -109,6 +109,8 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .sum-table .k { text-align: left; position: sticky; left: 0; z-index: 1; font-weight: 500; }
 .sum-table thead .k { z-index: 3; }
 .sum-table .g { text-align: left; font-weight: 500; }
+.sum-table td.bx { font-weight: 700; color: var(--accent); border-left: 1px solid var(--line); border-right: 1px solid var(--line); cursor: help; }
+.sum-table thead th.bx { color: var(--accent); }
 .sum-table td.z { color: var(--muted); opacity: 0.55; }
 .sum-table tbody tr:hover td { background: var(--slot); }
 .sum-table tfoot td { position: sticky; bottom: 0; font-weight: 700; background: var(--accent-soft); border-top: 2px solid var(--accent); border-bottom: 0; }
@@ -545,11 +547,21 @@ function sumColumns(sec, P) {
   }
   return out;
 }
+// 출고계획의 상자 환산에 쓰는 열: D+0(Must가 아닌 쪽)과 "Qty. per 1 Box". 둘 중 하나라도 없으면 null.
+function sumBoxCols(P, cols) {
+  var d0 = -1, per = -1;
+  cols.forEach(function (c) {
+    if (d0 < 0 && String(txt(P.head[1][c.i])).replace(/\s/g, "").toUpperCase() === "D+0" && !/must/i.test(String(txt(P.head[3][c.i])))) d0 = c.i;
+  });
+  P.head[1].forEach(function (x, i) { if (per < 0 && /per\s*1\s*box/i.test(String(txt(x)).replace(/\s+/g, " "))) per = i; });
+  return d0 >= 0 && per >= 0 ? { d0: d0, per: per } : null;
+}
 function renderSummary() {
-  var box = document.getElementById("sum-host"), st = document.getElementById("sum-status");
+  var sumBox = document.getElementById("sum-host"), st = document.getElementById("sum-status");
   document.getElementById("sum-title").textContent = SUM_TITLES[cur] || "Grp.Name별 요약";
-  if (!plan) { st.textContent = ""; box.innerHTML = '<p class="sum-hint">엑셀 파일을 넣으면 Grp.Name별 합계가 여기에 표시됩니다.</p>'; return; }
+  if (!plan) { st.textContent = ""; sumBox.innerHTML = '<p class="sum-hint">엑셀 파일을 넣으면 Grp.Name별 합계가 여기에 표시됩니다.</p>'; return; }
   var cols = sumColumns(cur, plan), groups = [], idx = {}, tot = cols.map(function () { return 0; }), items = 0;
+  var box = cur === "shipping" ? sumBoxCols(plan, cols) : null;
   plan.body.forEach(function (d) {
     var pno = txt(d[2]), grp = txt(d[1]);
     if (pno === "" || grp === "" || /^(↑|∑+)$/.test(pno)) return;
@@ -557,20 +569,50 @@ function renderSummary() {
     if (!g) { g = idx[key] = { model: txt(d[0]), grp: grp, v: cols.map(function () { return 0; }), n: 0 }; groups.push(g); }
     g.n++; items++;
     cols.forEach(function (col, j) { var v = num(d[col.i]); if (v != null && isFinite(v)) { g.v[j] += v; tot[j] += v; } });
+    // 상자 환산용: D+0 수량과 한 상자 적재 수량을 품명(Grp.Name)별로 모읍니다.
+    if (box) {
+      var q = num(d[box.d0]) || 0, per = num(d[box.per]);
+      if (!g.bx) g.bx = { q: 0, frac: 0, pers: {}, noPer: 0 };
+      g.bx.q += q;
+      if (per > 0) { g.bx.pers[per] = 1; g.bx.frac += q / per; } else if (q) g.bx.noPer += q;
+    }
   });
+  // 출고계획: D+0 열 오른쪽에 "상자" 열을 끼워 넣습니다. 품명이 같으면 품번이 달라도 한 상자에 담을 수 있으므로
+  //   품명별 D+0 수량 합 ÷ 한 상자 적재 수량 → 올림.  (한 품명 안에서 적재 수량이 서로 다르면 품번별로 나눈 값을 더해서 올림)
+  if (box) {
+    var at = -1, boxTot = 0;
+    cols.forEach(function (c, j) { if (c.i === box.d0) at = j + 1; });
+    cols.splice(at, 0, { box: true, label: "D+0\n" + String(txt(plan.head[2][box.d0])).trim() + "\n상자" });
+    groups.forEach(function (g) {
+      var b = g.bx || { q: 0, frac: 0, pers: {}, noPer: 0 }, pers = Object.keys(b.pers), val, tip;
+      if (b.noPer) { val = NaN; tip = "한 상자 적재 수량이 없는 품번에 D+0 수량 " + b.noPer + "개가 있어 환산할 수 없습니다"; }
+      else if (!b.q) { val = 0; tip = "D+0 수량 없음"; }
+      else {
+        val = Math.ceil(b.frac - 1e-9);
+        tip = pers.length === 1 ? b.q.toLocaleString("en-US") + " ÷ " + pers[0] + " = " + (Math.round(b.frac * 100) / 100) + " → 올림 " + val
+          : "한 상자 적재 수량이 품번마다 다름(" + pers.join(", ") + ") · 품번별로 나눠 더한 값 " + (Math.round(b.frac * 100) / 100) + " → 올림 " + val;
+      }
+      g.v.splice(at, 0, val); g.bt = tip;
+      if (val) boxTot += val;
+    });
+    tot.splice(at, 0, boxTot);
+  }
   // 대물류(MAIN · FRONT · FLOOR)를 맨 위에, 나머지는 파일에 나온 순서대로.
   groups = groups.map(function (g, i) { return [g, i]; }).sort(function (a, b) { return histRank(a[0].grp) - histRank(b[0].grp) || a[1] - b[1]; }).map(function (x) { return x[0]; });
   var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString("en-US"); };
-  var cell = function (v) { return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>"; };
+  var cell = function (v, j, g) {
+    if (!cols[j] || !cols[j].box) return '<td' + (v ? "" : ' class="z"') + ">" + fmt(v) + "</td>";
+    return '<td class="bx' + (v ? "" : " z") + '"' + (g && g.bt ? ' title="' + esc(g.bt) + '"' : "") + ">" + (isNaN(v) ? "–" : fmt(v)) + "</td>";
+  };
   var html = '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="k">Model</th><th class="g">Grp. Name</th>';
-  cols.forEach(function (c) { html += "<th" + (/(^|\n)sat$/i.test(c.label) ? ' class="sa"' : /(^|\n)sun$/i.test(c.label) ? ' class="wk"' : "") + ">" + esc(c.label) + "</th>"; });
+  cols.forEach(function (c) { html += "<th" + (c.box ? ' class="bx"' : /(^|\n)sat$/i.test(c.label) ? ' class="sa"' : /(^|\n)sun$/i.test(c.label) ? ' class="wk"' : "") + ">" + esc(c.label) + "</th>"; });
   html += "</tr></thead><tbody>";
   groups.forEach(function (g) {
-    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="g">' + esc(g.grp) + "</td>" + g.v.map(cell).join("") + "</tr>";
+    html += '<tr><td class="k">' + esc(g.model) + '</td><td class="g">' + esc(g.grp) + "</td>" + g.v.map(function (v, j) { return cell(v, j, g); }).join("") + "</tr>";
   });
-  html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td>' + tot.map(cell).join("") + "</tr></tfoot></table></div>";
-  box.innerHTML = html;
-  st.textContent = groups.length + "개 그룹 · 소계 행(↑, ∑) 제외하고 합산";
+  html += '</tbody><tfoot><tr><td class="k" colspan="2">합계</td>' + tot.map(function (v, j) { return cell(v, j, null); }).join("") + "</tr></tfoot></table></div>";
+  sumBox.innerHTML = html;
+  st.textContent = groups.length + "개 그룹 · 소계 행(↑, ∑) 제외하고 합산" + (box ? " · 상자 = 품명별 D+0 수량 합 ÷ 한 상자 적재 수량, 올림" : "");
 }
 
 // ── 한 화면 맞춤: 열 너비를 내용에 딱 맞게 줄이고, 그래도 넘치면 표 전체를 화면 폭에 맞게 축소합니다 (가로 스크롤 없음, 세로만 스크롤). ──
