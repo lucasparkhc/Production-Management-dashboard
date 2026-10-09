@@ -40,6 +40,14 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 .brand { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding-block: 16px 10px; }
 .brand h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
 .brand .stamp { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.brand-side { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.sync { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.sync-state::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.sync-state[data-s="ok"]::before { background: var(--s3); }
+.sync-state[data-s="err"]::before { background: var(--s2); }
+.sync-state[data-s="err"] { color: var(--fg); }
+.sync-btn { font: inherit; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.sync-btn:hover { border-color: var(--accent); }
 
 nav.rail { display: flex; gap: 28px; overflow-x: auto; scrollbar-width: none; }
 nav.rail::-webkit-scrollbar { display: none; }
@@ -209,7 +217,10 @@ body.view-plan main { padding-bottom: 14px; }
   <div class="wrap">
     <div class="brand">
       <h1>Production Management & Logistic</h1>
-      <span class="stamp" id="stamp"></span>
+      <div class="brand-side">
+        <span class="sync"><span class="sync-state" id="sync-state" role="status">내 브라우저에만 저장 중</span><button class="sync-btn" id="sync-btn" type="button">로그인</button></span>
+        <span class="stamp" id="stamp"></span>
+      </div>
     </div>
     <nav class="rail" aria-label="섹션">
       <div class="group">
@@ -1487,6 +1498,138 @@ show(start);
 
 document.getElementById("stamp").textContent =
   new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+// 공유 저장: 구글 로그인을 하면 계획표 · 기록 · 물류창고 데이터를 Firebase(Firestore)에 올려 팀이 같은 내용을 봅니다.
+// 화면 쪽 코드는 그대로 localStorage에 쓰고, 여기서 그 쓰기를 가로채 서버로 보내고 서버의 변경을 다시 localStorage와 화면에 반영합니다.
+// 문서 하나 = 저장 키 하나 { v: JSON 문자열(지웠으면 null), t: 바꾼 시각(ms), by: 바꾼 사람 }. 늦게 쓴 쪽이 이깁니다.
+(function () {
+  var stateEl = document.getElementById("sync-state"), btn = document.getElementById("sync-btn");
+  function say(t, s) { stateEl.textContent = t; stateEl.dataset.s = s || ""; }
+  if (!window.firebase || !firebase.auth || !firebase.firestore) { say("공유 서버에 연결하지 못함 · 내 브라우저에만 저장", "err"); btn.hidden = true; return; }
+  firebase.initializeApp({
+    apiKey: "AIzaSyAzqVOB4qFyN4J2wBaFFt1wvLSPb-ahCbM",
+    authDomain: "pml-dashboard-ff82d.firebaseapp.com",
+    projectId: "pml-dashboard-ff82d",
+    storageBucket: "pml-dashboard-ff82d.firebasestorage.app",
+    messagingSenderId: "211055062030",
+    appId: "1:211055062030:web:40edbca4b80f27fbaea05f"
+  });
+  var auth = firebase.auth(), col = firebase.firestore().collection("pml");
+  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1"];
+  var META_KEY = "pl-sync-meta", MAX_BYTES = 950000;
+  var rawSet = Storage.prototype.setItem, rawRemove = Storage.prototype.removeItem;
+  var meta = {};   // 키별 { t: 내가 가진 판의 시각, d: 아직 서버에 못 올린 변경이 있으면 1 }
+  try { meta = JSON.parse(localStorage.getItem(META_KEY) || "{}") || {}; } catch (e) { meta = {}; }
+  function metaSave() { try { rawSet.call(localStorage, META_KEY, JSON.stringify(meta)); } catch (e) {} }
+  function localGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  var user = null, live = false, unsub = null, timers = {};
+
+  function changed(k) {
+    meta[k] = { t: Date.now(), d: 1 };
+    metaSave();
+    if (!live) return;
+    clearTimeout(timers[k]);
+    timers[k] = setTimeout(function () { push(k); }, 400);
+  }
+  Storage.prototype.setItem = function (k, v) {
+    var shared = this === localStorage && KEYS.indexOf(k) >= 0, same = shared && this.getItem(k) === String(v);
+    rawSet.call(this, k, v);
+    if (shared && !same) changed(k);
+  };
+  Storage.prototype.removeItem = function (k) {
+    var shared = this === localStorage && KEYS.indexOf(k) >= 0, had = shared && this.getItem(k) !== null;
+    rawRemove.call(this, k);
+    if (had) changed(k);
+  };
+
+  function okText() { return "팀과 공유 중 · " + user.email; }
+  function push(k) {
+    if (!live || !user) return;
+    var v = localGet(k), m = meta[k] || (meta[k] = { t: Date.now(), d: 1 });
+    if (v !== null && new Blob([v]).size > MAX_BYTES) { say("데이터가 너무 커서 공유하지 못함 (" + k + ") · 내 브라우저에만 저장", "err"); return; }
+    var t = m.t;
+    say("올리는 중…", "ok");
+    col.doc(k).set({ v: v, t: t, by: user.email }).then(function () {
+      if (meta[k] && meta[k].t === t) { meta[k].d = 0; metaSave(); }
+      if (live) say(okText(), "ok");
+    }).catch(function (e) {
+      say(e && e.code === "permission-denied" ? "공유 권한이 없는 계정: " + user.email : "서버에 올리지 못함 · 내 브라우저에는 저장됨", "err");
+    });
+  }
+
+  // 서버에서 받은 내용을 화면 쪽 변수에 다시 싣고 지금 보던 화면을 다시 그립니다.
+  function refresh(keys) {
+    try {
+      keys.forEach(function (k) {
+        var v = localGet(k);
+        if (k === "pl-wh1") {
+          var w = null;
+          try { w = JSON.parse(v || "null"); } catch (e) {}
+          wh = w && w.slots ? w : { slots: {}, lines: {}, log: [], seq: 1, undo: null };
+          if (!wh.lines) wh.lines = {};
+          if (!wh.log) wh.log = [];
+          whSel = null;
+        } else if (k === "pl-hist1") {
+          try { hist = JSON.parse(v || "{}") || {}; } catch (e) { hist = {}; }
+        } else {
+          var sec = k.slice(9);
+          delete plans[sec];
+          loadStored(sec);
+        }
+      });
+      if (curSec) show(curSec);
+    } catch (e) { location.reload(); }
+  }
+
+  function onSnap(snap, first) {
+    var applied = [], seen = {};
+    snap.docChanges().forEach(function (ch) {
+      var k = ch.doc.id;
+      if (KEYS.indexOf(k) < 0 || ch.type === "removed") return;
+      seen[k] = 1;
+      if (ch.doc.metadata.hasPendingWrites) return;
+      var data = ch.doc.data(), rv = typeof data.v === "string" ? data.v : null, rt = Number(data.t) || 0;
+      var m = meta[k] || { t: 0, d: 0 };
+      if (rv === localGet(k)) { if (!m.d || m.t <= rt) meta[k] = { t: rt, d: 0 }; return; }
+      if (m.d && m.t > rt) { push(k); return; }   // 내 쪽이 더 새 변경
+      try { if (rv === null) rawRemove.call(localStorage, k); else rawSet.call(localStorage, k, rv); } catch (e) { return; }
+      meta[k] = { t: rt, d: 0 };
+      applied.push(k);
+    });
+    if (first) KEYS.forEach(function (k) { if (!seen[k] && localGet(k) !== null) push(k); });   // 서버에 아직 없는 데이터는 내 것을 올립니다
+    metaSave();
+    if (applied.length) refresh(applied);
+  }
+
+  auth.onAuthStateChanged(function (u) {
+    if (unsub) { unsub(); unsub = null; }
+    user = u; live = false;
+    if (!u) { btn.textContent = "로그인"; btn.title = ""; say("내 브라우저에만 저장 중"); return; }
+    btn.textContent = "로그아웃"; btn.title = u.email;
+    say("연결 중…");
+    var first = true;
+    unsub = col.onSnapshot(function (snap) {
+      live = true;
+      say(okText(), "ok");
+      onSnap(snap, first);
+      first = false;
+    }, function (e) {
+      live = false;
+      say(e && e.code === "permission-denied" ? "공유 권한이 없는 계정: " + u.email + " · 내 브라우저에만 저장" : "공유 서버 연결 오류 · 내 브라우저에만 저장", "err");
+    });
+  });
+  btn.addEventListener("click", function () {
+    if (user) { auth.signOut(); return; }
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) {
+      if (e && (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request")) return;
+      say("로그인하지 못함" + (e && e.code ? " (" + e.code + ")" : ""), "err");
+    });
+  });
+})();
 </script>
 </body>
 </html>
