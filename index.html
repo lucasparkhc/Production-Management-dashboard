@@ -1814,8 +1814,7 @@ function slLoad(file) {
     if (t.hasAttribute("data-sl-item")) {
       var n = t.getAttribute("data-sl-item");
       slName = slName && slName.m === slItemModel && slName.n === n ? null : { m: slItemModel, n: n };
-      slRender();
-      if (slName) { var hh = document.getElementById("sl-parts-h"); if (hh && hh.scrollIntoView) hh.scrollIntoView({ block: "start", behavior: "smooth" }); }
+      slRender();   // 화면은 움직이지 않습니다(아래 품번별 재고만 바뀜)
       return;
     }
     slModel = t.getAttribute("data-sl-model"); slName = null; slRender();
