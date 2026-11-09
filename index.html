@@ -1772,7 +1772,7 @@ function slRender() {
           "<td" + (L.bal > 0 && !per ? ' class="z"' : "") + ">" + (L.bal > 0 ? (per ? slFmt(Math.ceil(L.bal / per)) : "?") : "0") + "</td></tr>";
       }).join("") : "";
       return '<tr' + (Ls.length ? ' class="sl-has-lot' + (open ? " open" : "") + '" data-sl-part="' + esc(P.p) + '" title="눌러서 LOT별 재고 ' + (open ? "접기" : "보기") + '"' : "") + '><td class="l">' + esc(P.model) + '</td><td class="l">' + esc(P.name) + '</td><td class="l mono">' +
-        (Ls.length ? '<span class="sl-caret" aria-hidden="true">▸</span>' : '<span class="sl-caret"></span>') + esc(P.p) + (P.reg ? "" : ' <span class="sl-tag bad">미등록</span>') + (Ls.length ? ' <span class="sl-lotn' + (bad ? " bad" : "") + '">LOT ' + Ls.length + (bad ? " 확인" : "") + "</span>" : "") + "</td>" +
+        (Ls.length ? '<span class="sl-caret" aria-hidden="true">▸</span>' : '<span class="sl-caret"></span>') + esc(P.p) + (P.reg ? "" : ' <span class="sl-tag bad">미등록</span>') + (bad ? ' <span class="sl-lotn bad">LOT 확인</span>' : "") + "</td>" +
         slCell(P.prev) + slCell(P.inQ) + slCell(P.inC, "cx") + slCell(P.outQ) + slCell(P.outC, "cx") + slCell(P.end, "end" + (P.end < 0 ? " neg" : "")) +
         '<td><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" data-boxq="' + esc(P.p) + '" value="' + (boxq[whKey(P.p)] || "") + '" placeholder="–" aria-label="' + esc(P.p) + ' 상자당 수량"></td>' +
         '<td class="' + (P.end > 0 && !boxq[whKey(P.p)] ? "z" : "") + '">' + (P.end > 0 ? (boxq[whKey(P.p)] ? slFmt(slBoxes(P.p, P.end)) : "?") : "0") + "</td></tr>" + sub;
