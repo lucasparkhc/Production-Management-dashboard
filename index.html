@@ -437,7 +437,6 @@ tr.open .sl-caret { transform: rotate(90deg); }
       <div class="subtabs" role="tablist" aria-label="보기">
         <button class="subtab" role="tab" type="button" data-wview="sales">영업창고 현황</button>
         <button class="subtab" role="tab" type="button" data-wview="map">배치도</button>
-        <button class="subtab" role="tab" type="button" data-wview="stock">재고</button>
         <button class="subtab" role="tab" type="button" data-wview="master">기준정보</button>
       </div>
       <span class="sheet-status" id="wh-bar-status"></span>
@@ -1444,9 +1443,9 @@ function whApply(kind, rows, fileName) {
   whStatus(fileName + " · " + word + " " + done + " / " + req + " 상자 처리" + (done < req ? " · " + (req - done) + "상자는 " + (kind === "in" ? "라인에 자리가 없어(적재 창고에 남음)" : "재고가 없어") + " 처리하지 못했습니다 (아래 내역 확인)" : "") + (saved ? "" : " · 브라우저 저장 실패"));
 }
 function whStatus(msg) { document.getElementById("wh-status").textContent = msg; document.getElementById("wh-bar-status").textContent = msg; }
-// 물류창고의 작은 탭: 영업창고 현황 / 배치도(요약 숫자 + 도면) / 재고 / 기준정보. 위쪽 모양은 생산관리 화면과 같습니다.
+// 물류창고의 작은 탭: 영업창고 현황 / 배치도(요약 숫자 + 도면) / 기준정보. (재고 · 입출고 처리 탭은 없앰) 위쪽 모양은 생산관리 화면과 같습니다.
 var whView = "sales";
-try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "master") whView = wv; } catch (e) {}   // 입출고 처리 탭은 없앴습니다(배치도는 영업창고 대장으로 채움)
+try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "master") whView = wv; } catch (e) {}   // 입출고 처리 탭은 없앴습니다(배치도는 영업창고 대장으로 채움)
 var whTabs = document.querySelectorAll("#wh-bar .subtab");
 function whApplyView() {
   document.getElementById("wh-kpis").hidden = whView !== "map";
