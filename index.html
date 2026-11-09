@@ -202,7 +202,8 @@ body.view-plan main { padding-bottom: 14px; }
 .sl-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .sl-kpi.warn b { color: #b26a00; }
 .sl-kpi.ok b { color: var(--accent); }
-.sl-chart svg { display: block; width: 100%; height: 220px; font-family: var(--font-ui); }
+.sl-plot { overflow-x: auto; }
+.sl-chart svg { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--font-ui); }
 .sl-chart .grid { stroke: var(--line); stroke-width: 1; }
 .sl-chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .sl-chart .ax.we { fill: #e5484d; }
@@ -229,7 +230,7 @@ body.view-plan main { padding-bottom: 14px; }
 .sl-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .sl-two > * { min-width: 0; }
 #sl-body { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
-.sl-two .sum-table thead th { white-space: nowrap; }
+#sl-body .sum-table thead th { white-space: nowrap; }
 .sl-empty { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .sl-empty ol { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 @media (max-width: 1000px) { .sl-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sl-two { grid-template-columns: 1fr; } }
@@ -1648,7 +1649,7 @@ function slRender() {
   }
   // 일자별 그래프
   h += '<section class="sheet-panel sl-chart"><div class="sheet-top"><div><h3>일자별 입고 · 출고</h3><span class="sheet-status">' + y + "년 " + m + "월 · 취소 차감 수량</span></div>" +
-    '<div class="sl-legend"><span><i style="background:var(--s1)"></i>입고</span><span><i style="background:var(--s2)"></i>출고</span></div></div>' + slChart(C.daily) + "</section>";
+    '<div class="sl-legend"><span><i style="background:var(--s1)"></i>입고</span><span><i style="background:var(--s2)"></i>출고</span></div></div><div class="sl-plot">' + slChart(C.daily) + "</div></section>";
 
   // 품번별 재고
   var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
