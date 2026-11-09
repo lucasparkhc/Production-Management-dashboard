@@ -1704,13 +1704,7 @@ function slRender() {
     return;
   }
   var C = slCompute(), issues = C.unreg.length + C.outside + C.lotIssues + C.cancelBad + C.negEnd;
-  kp.hidden = false;
-  kp.innerHTML =
-    '<div class="wh-kpi"><span>전월재고</span><b>' + slFmt(C.T.prev) + "</b></div>" +
-    '<div class="wh-kpi"><span>당월 입고 <small>(취소 차감)</small></span><b>' + slFmt(C.T.inQ + C.T.inC) + "</b></div>" +
-    '<div class="wh-kpi"><span>당월 출고 <small>(취소 차감)</small></span><b>' + slFmt(C.T.outQ + C.T.outC) + "</b></div>" +
-    '<div class="wh-kpi"><span>월말재고</span><b>' + slFmt(C.T.end) + " <small>" + C.parts.filter(function (P) { return P.end; }).length + "개 품번</small></b></div>" +
-    '<div class="wh-kpi sl-kpi ' + (issues ? "warn" : "ok") + '"><span>입력 점검</span><b>' + (issues ? issues + " <small>건 확인 필요</small>" : "정상") + "</b></div>";
+  kp.innerHTML = ""; kp.hidden = true;   // 요약 숫자 줄은 쓰지 않습니다(품목별 재고가 대신함). 입력 오류는 아래 경고 목록으로 보여 줍니다.
 
   var y = +sl.month.slice(0, 4), m = +sl.month.slice(5, 7);
   var h = "";
@@ -1738,7 +1732,7 @@ function slRender() {
     if (P.end > 0) { if (boxq[whKey(P.p)]) I.box += slBoxes(P.p, P.end); else I.noBox++; }
   });
   var itemsEnd = items.reduce(function (a, I) { return a + I.end; }, 0), itemsStock = items.filter(function (I) { return I.end; }).length;
-  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목별 재고</h3><span class="sheet-status">' + esc(slItemModel) + " · " + items.length + "개 품목 · 재고 있는 품목 " + itemsStock + "개 · 월말재고 합계 " + slFmt(itemsEnd) + " · 눌러서 품번 보기</span></div>" +
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목별 재고</h3><span class="sheet-status">' + esc(slItemModel) + " · " + items.length + "개 품목 · 재고 있는 품목 " + itemsStock + "개 · 월말재고 합계 " + slFmt(itemsEnd) + " · 누르면 아래 품번 · 입고 · 출고가 그 품목만</span></div>" +
     '<div class="sheet-tools"><span class="sl-chips">' + models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-item-model="' + esc(x) + '" aria-pressed="' + (slItemModel === x) + '">' + esc(x) + "</button>"; }).join("") + "</span></div></div>" +
     '<div class="sl-items">' + items.map(function (I) {
       var on = slName && slName.m === slItemModel && slName.n === I.n;
@@ -1760,7 +1754,7 @@ function slRender() {
   var S = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
   list.forEach(function (P) { for (var f in S) S[f] += P[f]; });
   h += '<section class="sheet-panel"><div class="sheet-top"><div><h3 id="sl-parts-h">품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 품번을 누르면 LOT별 재고 · 상자당 수량을 적으면 배치도에 반영</span></div>" +
-    '<div class="sheet-tools"><span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>" +
+    '<div class="sheet-tools">' + (slName ? "" : '<span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>") +
     (slName ? '<button class="sl-chip" type="button" data-sl-item-clear aria-pressed="true">품목: ' + esc(slName.m + " · " + slName.n) + " ✕</button>" : '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>") +
     '<input class="sheet-search" id="sl-search" type="search" placeholder="품번 · 품명 찾기" aria-label="품번 · 품명 찾기" value="' + esc(slQ) + '"></div></div>';
   h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th><th>상자당 수량</th><th>상자 수</th></tr></thead><tbody>' +
@@ -1780,9 +1774,12 @@ function slRender() {
     : '<p class="sum-hint">조건에 맞는 품번이 없습니다.' + (slActiveOnly ? " ‘재고 · 입출고 있는 품번만’을 끄면 등록된 품번이 모두 보입니다." : "") + "</p>";
   h += "</section>";
 
-  // 입고 · 출고 내역
-  h += '<div class="sl-two"><section class="sheet-panel"><div class="sheet-top"><div><h3>입고 내역</h3><span class="sheet-status">' + sl.ins.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.ins, "in", C) + "</section>" +
-    '<section class="sheet-panel"><div class="sheet-top"><div><h3>출고 내역</h3><span class="sheet-status">' + sl.outs.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.outs, "out", C) + "</section></div>";
+  // 입고 · 출고 내역: 품목 카드를 고르면 그 품목만
+  var pOf = {}; C.parts.forEach(function (P) { pOf[whKey(P.p)] = P; });
+  var inItem = function (e) { var P = pOf[whKey(e[1])]; return !slName || (P && P.model === slName.m && P.name === slName.n); };
+  var insF = sl.ins.filter(inItem), outsF = sl.outs.filter(inItem), scope = slName ? esc(slName.m + " · " + slName.n) + " · " : "";
+  h += '<div class="sl-two"><section class="sheet-panel"><div class="sheet-top"><div><h3>입고 내역</h3><span class="sheet-status">' + scope + insF.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(insF, "in", C) + "</section>" +
+    '<section class="sheet-panel"><div class="sheet-top"><div><h3>출고 내역</h3><span class="sheet-status">' + scope + outsF.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(outsF, "out", C) + "</section></div>";
 
   // 일자별 그래프: 참고용이라 맨 아래에 접어 둡니다. 펼친 상태는 다시 그려도 유지합니다.
   h += '<details class="sheet-panel sl-chart sl-fold" id="sl-chart-fold"' + (slChartOpen ? " open" : "") + '><summary><h3>일자별 입고 · 출고</h3><span class="sheet-status">' + y + "년 " + m + "월 · 취소 차감 수량 · 눌러서 펼치기</span></summary>" +
