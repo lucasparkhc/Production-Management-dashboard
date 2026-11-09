@@ -203,6 +203,14 @@ body.view-plan main { padding-bottom: 14px; }
 .sl-kpi.warn b { color: #b26a00; }
 .sl-kpi.ok b { color: var(--accent); }
 .sl-plot { overflow-x: auto; }
+.sl-fold summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sl-fold summary::-webkit-details-marker { display: none; }
+.sl-fold summary::before { content: "▸"; color: var(--muted); font-size: 12px; transition: transform 0.15s; }
+.sl-fold[open] summary::before { transform: rotate(90deg); }
+.sl-fold summary h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.sl-fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.sl-fold:not([open]) { padding-bottom: 16px; }
+@media (prefers-reduced-motion: reduce) { .sl-fold summary::before { transition: none; } }
 .sl-chart svg { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--font-ui); }
 .sl-chart .grid { stroke: var(--line); stroke-width: 1; }
 .sl-chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -1489,11 +1497,11 @@ var whSearchTimer = null;
 document.getElementById("wh-search").addEventListener("input", function () { clearTimeout(whSearchTimer); whSearchTimer = setTimeout(whRender, 120); });
 
 // ── 영업창고 현황 ──
-// 월간 입출고 대장 엑셀(1.입고 · 2.출고 · 3.집계 시트)을 읽어 품번별 재고 · 일자별 입출고 · 로트 잔량 · 입출고 내역으로 보여 줍니다.
+// 월간 입출고 대장 엑셀(1.입고 · 2.출고 · 3.집계 시트)을 읽어 품번별 재고 · LOT별 재고 현황 · 입출고 내역(· 접어 둔 일자별 그래프)으로 보여 줍니다.
 // 계산은 엑셀 집계 시트와 같은 규칙입니다: 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소). 취소는 마이너스 수량, 기준월 밖 일자는 집계에서 뺍니다.
 var SL_KEY = "pl-sales1";
 var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
-var slModel = "", slActiveOnly = true, slQ = "";
+var slModel = "", slActiveOnly = true, slQ = "", slChartOpen = false;
 // 품번별 상자당 수량 { 품번(대문자): 개수 }. 대장 파일을 새로 넣어도 남습니다.
 var BOXQ_KEY = "pl-boxq1", boxq = {};
 try { boxq = JSON.parse(localStorage.getItem(BOXQ_KEY) || "{}") || {}; } catch (e) { boxq = {}; }
@@ -1651,7 +1659,7 @@ function slEntryTable(list, kind, C) {
   if (!list.length) return '<p class="sum-hint">' + (kind === "in" ? "입고" : "출고") + " 내역이 없습니다.</p>";
   var master = {}; C.parts.forEach(function (P) { master[whKey(P.p)] = P; });
   var rows = list.map(function (e, i) { return [e, i]; }).sort(function (a, b) { return a[0][0] < b[0][0] ? 1 : a[0][0] > b[0][0] ? -1 : b[1] - a[1]; });
-  return '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">일자</th><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th class="l">로트</th><th>수량</th><th class="l">' + (kind === "in" ? "입고처" : "출고처") + '</th><th class="l">비고</th></tr></thead><tbody>' +
+  return '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">일자</th><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th class="l">LOT</th><th>수량</th><th class="l">' + (kind === "in" ? "입고처" : "출고처") + '</th><th class="l">비고</th></tr></thead><tbody>' +
     rows.map(function (x) {
       var e = x[0], P = master[whKey(e[1])] || {}, out = !e[0] || e[0].slice(0, 7) !== sl.month;
       return '<tr><td class="l mono">' + esc(e[0] || "–") + (out ? ' <span class="sl-tag warn">기준월 외</span>' : "") + '</td><td class="l">' + esc(P.model || "") + '</td><td class="l">' + esc(P.name || "") + '</td><td class="l mono">' + esc(e[1]) + (P.reg === false ? ' <span class="sl-tag bad">미등록</span>' : "") + '</td><td class="l mono">' + esc(e[2]) + "</td>" +
@@ -1665,7 +1673,7 @@ function slRender() {
   if (!sl) {
     kp.innerHTML = ""; kp.hidden = true;
     body.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">영업창고 월간 입출고 대장을 넣어 주세요</h3>' +
-      '<ol><li>매달 쓰는 <b>영업창고 입출고 엑셀</b>(입고 · 출고 · 집계 시트)을 그대로 넣습니다.</li><li>품번별 월말재고, 일자별 입고 · 출고, 로트별 잔량, 입출고 내역이 정리되어 나옵니다.</li><li>새 내용을 입력한 뒤 같은 파일을 다시 넣으면 화면이 그 파일 기준으로 바뀝니다.</li></ol>' +
+      '<ol><li>매달 쓰는 <b>영업창고 입출고 엑셀</b>(입고 · 출고 · 집계 시트)을 그대로 넣습니다.</li><li>품번별 월말재고, LOT별 재고 현황, 입출고 내역이 정리되어 나오고 배치도도 함께 채워집니다.</li><li>새 내용을 입력한 뒤 같은 파일을 다시 넣으면 화면이 그 파일 기준으로 바뀝니다.</li></ol>' +
       '<button class="btn primary" type="button" data-sl-load>월간 입출고 엑셀 넣기</button></section>';
     return;
   }
@@ -1685,12 +1693,9 @@ function slRender() {
       (C.unreg.length ? "<li>집계 시트에 없는 신규 품번 " + C.unreg.length + "개: " + esc(C.unreg.join(", ")) + " → 집계 시트에 차종 · 품명 · 품번 등록</li>" : "") +
       (C.outside ? "<li>기준월(" + sl.month + ") 밖 일자 " + C.outside + "건은 집계에서 빠졌습니다.</li>" : "") +
       (C.cancelBad ? "<li>같은 품번 · 로트의 원래 입력이 없는 취소 " + C.cancelBad + "건</li>" : "") +
-      (C.lotIssues ? "<li>입고보다 출고가 많은 로트 " + C.lotIssues + "개 (아래 로트별 잔량 확인)</li>" : "") +
+      (C.lotIssues ? "<li>입고보다 출고가 많은 LOT " + C.lotIssues + "개 (아래 LOT별 재고 현황 확인)</li>" : "") +
       (C.negEnd ? "<li>월말재고가 마이너스인 품번 " + C.negEnd + "개</li>" : "") + "</ul>";
   }
-  // 일자별 그래프
-  h += '<section class="sheet-panel sl-chart"><div class="sheet-top"><div><h3>일자별 입고 · 출고</h3><span class="sheet-status">' + y + "년 " + m + "월 · 취소 차감 수량</span></div>" +
-    '<div class="sl-legend"><span><i style="background:var(--s1)"></i>입고</span><span><i style="background:var(--s2)"></i>출고</span></div></div><div class="sl-plot">' + slChart(C.daily) + "</div></section>";
 
   // 품번별 재고
   var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
@@ -1713,17 +1718,21 @@ function slRender() {
     : '<p class="sum-hint">조건에 맞는 품번이 없습니다.' + (slActiveOnly ? " ‘재고 · 입출고 있는 품번만’을 끄면 등록된 품번이 모두 보입니다." : "") + "</p>";
   h += "</section>";
 
-  // 로트별 잔량 (선입선출 확인용: 입고일이 이른 로트부터)
+  // LOT별 재고 현황 (선입선출 확인용: 입고일이 이른 LOT부터)
   var lots = C.lots.filter(function (L) { return L.st !== "zero"; }).sort(function (a, b) { return a.p < b.p ? -1 : a.p > b.p ? 1 : (a.first || "9") < (b.first || "9") ? -1 : (a.first || "9") > (b.first || "9") ? 1 : a.lot < b.lot ? -1 : 1; });
-  var tag = { ok: '<span class="sl-tag ok">잔량</span>', noin: '<span class="sl-tag warn">입고이력 없음 (전월분?)</span>', over: '<span class="sl-tag bad">출고 초과</span>' };
-  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>로트별 잔량</h3><span class="sheet-status">입고 − 출고 · 다 나간 로트는 숨김 · 품번마다 입고일이 이른 로트부터</span></div></div>' +
-    (lots.length ? '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">품번</th><th class="l">로트</th><th class="l">첫 입고일</th><th>입고</th><th>출고</th><th>잔량</th><th class="l">상태</th></tr></thead><tbody>' +
+  var tag = { ok: '<span class="sl-tag ok">재고 있음</span>', noin: '<span class="sl-tag warn">입고이력 없음 (전월분?)</span>', over: '<span class="sl-tag bad">출고 초과</span>' };
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>LOT별 재고 현황</h3><span class="sheet-status">재고 = 입고 − 출고 · 다 나간 LOT는 숨김 · 품번마다 입고일이 이른 LOT부터 (먼저 출고할 순서)</span></div></div>' +
+    (lots.length ? '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">품번</th><th class="l">LOT</th><th class="l">첫 입고일</th><th>입고</th><th>출고</th><th>재고</th><th class="l">상태</th></tr></thead><tbody>' +
       lots.map(function (L) { return '<tr><td class="l mono">' + esc(L.p) + '</td><td class="l mono">' + esc(L.lot || "–") + '</td><td class="l mono">' + esc(L.first || "–") + "</td>" + slCell(L.i) + slCell(L.o) + slCell(L.bal, "end" + (L.bal < 0 ? " neg" : "")) + '<td class="l">' + tag[L.st] + "</td></tr>"; }).join("") + "</tbody></table></div>"
-      : '<p class="sum-hint">남아 있는 로트가 없습니다.</p>') + "</section>";
+      : '<p class="sum-hint">재고가 남아 있는 LOT가 없습니다.</p>') + "</section>";
 
   // 입고 · 출고 내역
   h += '<div class="sl-two"><section class="sheet-panel"><div class="sheet-top"><div><h3>입고 내역</h3><span class="sheet-status">' + sl.ins.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.ins, "in", C) + "</section>" +
     '<section class="sheet-panel"><div class="sheet-top"><div><h3>출고 내역</h3><span class="sheet-status">' + sl.outs.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.outs, "out", C) + "</section></div>";
+
+  // 일자별 그래프: 참고용이라 맨 아래에 접어 둡니다. 펼친 상태는 다시 그려도 유지합니다.
+  h += '<details class="sheet-panel sl-chart sl-fold" id="sl-chart-fold"' + (slChartOpen ? " open" : "") + '><summary><h3>일자별 입고 · 출고</h3><span class="sheet-status">' + y + "년 " + m + "월 · 취소 차감 수량 · 눌러서 펼치기</span></summary>" +
+    '<div class="sl-legend"><span><i style="background:var(--s1)"></i>입고</span><span><i style="background:var(--s2)"></i>출고</span></div><div class="sl-plot">' + slChart(C.daily) + "</div></details>";
 
   var focused = document.activeElement && document.activeElement.id === "sl-search", caret = focused ? document.activeElement.selectionStart : 0;
   body.innerHTML = h;
@@ -1759,6 +1768,7 @@ function slLoad(file) {
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
     slModel = t.getAttribute("data-sl-model"); slRender();
   });
+  wrap.addEventListener("toggle", function (e) { if (e.target.id === "sl-chart-fold") slChartOpen = e.target.open; }, true);
   wrap.addEventListener("change", function (e) {
     if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); return; }
     var p = e.target.getAttribute && e.target.getAttribute("data-boxq");
