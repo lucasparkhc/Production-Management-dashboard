@@ -1714,7 +1714,7 @@ function slRender() {
   var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
   if (slModel && models.indexOf(slModel) < 0) slModel = "";
 
-  // 품목별 재고: 차종마다 품명(품목) 단위로 묶은 타일. AC28은 14개 품목. 타일을 누르면 아래 품번별 재고가 그 품목만 보여 줍니다.
+  // 품목별 재고: 차종마다 품명(품목) 단위로 묶은 타일(품목 이름과 재고 수량만, 세부는 아래 품번별 재고). AC28은 14개 품목. 타일을 누르면 아래 품번별 재고가 그 품목만 보여 줍니다.
   if (models.indexOf(slItemModel) < 0) slItemModel = models[0] || "";
   var items = [], byItem = {};
   C.parts.forEach(function (P) {
@@ -1730,12 +1730,8 @@ function slRender() {
     '<div class="sheet-tools"><span class="sl-chips">' + models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-item-model="' + esc(x) + '" aria-pressed="' + (slItemModel === x) + '">' + esc(x) + "</button>"; }).join("") + "</span></div></div>" +
     '<div class="sl-items">' + items.map(function (I) {
       var on = slName && slName.m === slItemModel && slName.n === I.n;
-      var stocked = I.parts.filter(function (P) { return P.end; });
       return '<button class="sl-item' + (I.end ? "" : " zero") + (on ? " on" : "") + '" type="button" data-sl-item="' + esc(I.n) + '" aria-pressed="' + !!on + '">' +
         '<span class="nm">' + esc(I.n) + '</span><b class="' + (I.end < 0 ? "neg" : "") + '">' + slFmt(I.end) + "</b>" +
-        '<span class="meta">품번 ' + I.parts.length + "개" + (I.end > 0 ? " · 상자 " + (I.noBox ? (I.box ? I.box + "+?" : "?") : I.box) : "") + "</span>" +
-        '<span class="meta">입고 ' + slFmt(I.inN) + " · 출고 " + slFmt(I.outN) + "</span>" +
-        (stocked.length ? '<span class="pn">' + stocked.map(function (P) { return esc(P.p) + " <em>" + slFmt(P.end) + "</em>"; }).join("<br>") + "</span>" : "") +
         "</button>";
     }).join("") + "</div></section>";
 
