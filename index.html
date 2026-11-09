@@ -251,6 +251,17 @@ tr.open .sl-caret { transform: rotate(90deg); }
 .sl-tag.bad { color: #c62828; border-color: #e8a1a1; background: rgba(198, 40, 40, 0.07); }
 .sl-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .sl-two > * { min-width: 0; }
+.sl-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.sl-year { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.sl-months { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.sl-mon { appearance: none; font: inherit; font-size: 13px; font-weight: 500; min-width: 46px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.sl-mon:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.sl-mon:disabled { color: var(--muted); opacity: 0.45; cursor: default; background: transparent; }
+.sl-mon[aria-pressed="true"], .sl-mon[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.sl-mon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sl-del { margin-left: auto; }
+.sl-past { margin: 0; padding: 10px 14px; border-radius: 5px; border: 1px solid var(--s1); background: color-mix(in srgb, var(--s1) 10%, transparent); font-size: 13px; }
+.sl-linkbtn { appearance: none; border: 0; background: none; font: inherit; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; padding: 0 2px; }
 .sl-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .sl-item { appearance: none; font: inherit; text-align: left; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sl-item:hover { border-color: var(--accent); }
@@ -1325,7 +1336,7 @@ function whRender() {
   document.getElementById("wh-map").innerHTML = whSvg();
   var src = document.getElementById("wh-src"), L = wh.fromLedger;
   src.hidden = !L;
-  if (L) src.innerHTML = "<b>영업창고 대장 기준 배치</b> · " + esc(L.f) + " · " + new Date(L.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) +
+  if (L) src.innerHTML = "<b>영업창고 대장 기준 배치</b>" + (L.month ? " · " + L.month.slice(0, 4) + "년 " + (+L.month.slice(5, 7)) + "월" : "") + " · " + esc(L.f) + " · " + new Date(L.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) +
     (L.missing.length ? ' · <span class="wh-part">상자당 수량 미입력 ' + L.missing.length + "개 품번 빠짐 (" + esc(L.missing.join(", ")) + ")</span>" : "") +
     (L.over ? ' · <span class="wh-part">라인 자리가 없어 ' + L.over + "상자는 적재 창고에 있음</span>" : "") +
     " · 영업창고 현황 탭에서 대장을 다시 넣거나 상자당 수량을 바꾸면 배치도가 다시 그려집니다.";
@@ -1524,7 +1535,9 @@ document.getElementById("wh-search").addEventListener("input", function () { cle
 // ── 영업창고 현황 ──
 // 월간 입출고 대장 엑셀(1.입고 · 2.출고 · 3.집계 시트)을 읽어 품목 · 품번별 재고(LOT 펼치기) · 입출고 내역(· 접어 둔 일자별 그래프)으로 보여 줍니다.
 // 계산은 엑셀 집계 시트와 같은 규칙입니다: 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소). 취소는 마이너스 수량, 기준월 밖 일자는 집계에서 뺍니다.
-var SL_KEY = "pl-sales1";
+var SL_KEY = "pl-sales1";   // 예전 형식(한 달만). 열면 달별 저장으로 옮깁니다.
+// 달별 저장: 달마다 키 하나 "pl-sales-YYYY-MM". 어떤 달이 있는지는 저장된 키 목록으로 압니다(팀 공유도 같은 키).
+var SL_PREFIX = "pl-sales-", SL_RE = /^pl-sales-\d{4}-\d{2}$/;
 var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
 var slModel = "", slActiveOnly = true, slQ = "", slChartOpen = false;
 var slItemModel = "AC28", slName = null, slOpenParts = {};   // slOpenParts: LOT를 펼친 품번   // 품목별 재고에서 고른 차종 · 품목(품명) { m, n }
@@ -1536,8 +1549,9 @@ function slBoxes(p, qty) { var n = boxq[whKey(p)]; return n > 0 && qty > 0 ? Mat
 // 대장의 로트 잔량 → 배치도. 품번마다 입고일이 이른 로트부터 라인 1번에 놓습니다(선입선출: 1번부터 출고).
 // 로트 잔량을 상자당 수량으로 나눠 올림한 만큼 상자를 만들고, 마지막 상자에는 남은 개수만 담습니다.
 function slSyncMap() {
-  if (!sl) return;
-  var C = slCompute(), names = {}, missing = [], over = 0, seq = 1;
+  var D = slLatest();   // 배치도는 언제나 가장 최근 달 기준(지금 창고에 있는 상자)
+  if (!D) return;
+  var C = slCompute(D), names = {}, missing = [], over = 0, seq = 1;
   C.parts.forEach(function (P) { names[whKey(P.p)] = P.name; });
   var lots = C.lots.filter(function (L) { return L.bal > 0; }).sort(function (a, b) { return (a.first || "9") < (b.first || "9") ? -1 : (a.first || "9") > (b.first || "9") ? 1 : a.lot < b.lot ? -1 : 1; });
   wh.slots = {}; wh.undo = null; whSel = null;
@@ -1550,16 +1564,37 @@ function slSyncMap() {
       var lines = whLinesFor(L.p, true).filter(function (l) { return whLineBoxes(l).length < WH_N; });
       if (!lines.length) { over++; continue; }
       var cur = whLineBoxes(lines[0]);
-      cur.push({ p: L.p, n: names[whKey(L.p)] || "", d: L.first || sl.month + "-01", q: seq++, lot: L.lot, c: c });
+      cur.push({ p: L.p, n: names[whKey(L.p)] || "", d: L.first || D.month + "-01", q: seq++, lot: L.lot, c: c });
       whSetLine(lines[0], cur);
     }
   });
   wh.seq = seq;
-  wh.fromLedger = { f: sl.f, at: sl.at, missing: missing, over: over };
+  wh.fromLedger = { f: D.f, at: D.at, month: D.month, missing: missing, over: over };
   whSave();
 }
-try { sl = JSON.parse(localStorage.getItem(SL_KEY) || "null"); } catch (e) { sl = null; }
-function slSave() { try { localStorage.setItem(SL_KEY, JSON.stringify(sl)); return true; } catch (e) { return false; } }
+function slMonths() {   // 데이터가 있는 달, 오래된 달부터
+  var out = [];
+  try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (SL_RE.test(k)) out.push(k.slice(SL_PREFIX.length)); } } catch (e) {}
+  return out.sort();
+}
+function slGet(mon) { try { var d = JSON.parse(localStorage.getItem(SL_PREFIX + mon) || "null"); return d && d.month ? d : null; } catch (e) { return null; } }
+function slLatest() { var ms = slMonths(); return ms.length ? slGet(ms[ms.length - 1]) : null; }
+function slPrevMonth(mon) { var y = +mon.slice(0, 4), m = +mon.slice(5, 7) - 1; if (!m) { y--; m = 12; } return y + "-" + (m < 10 ? "0" : "") + m; }
+function slMigrate() {   // 예전 한 달짜리 저장 → 그 달 키로
+  var old = null;
+  try { old = JSON.parse(localStorage.getItem(SL_KEY) || "null"); } catch (e) {}
+  if (old && old.month && !slGet(old.month)) { try { localStorage.setItem(SL_PREFIX + old.month, JSON.stringify(old)); } catch (e) { return; } }
+  try { if (localStorage.getItem(SL_KEY) !== null) localStorage.removeItem(SL_KEY); } catch (e) {}
+}
+var slCur = "";   // 보고 있는 달
+try { slCur = localStorage.getItem("pl-sales-sel") || ""; } catch (e) {}
+function slPick() {   // 보고 있는 달을 다시 읽습니다. 없어진 달이면 가장 최근 달로.
+  var ms = slMonths();
+  if (ms.indexOf(slCur) < 0) slCur = ms.length ? ms[ms.length - 1] : "";
+  sl = slCur ? slGet(slCur) : null;
+}
+function slSetCur(mon) { slCur = mon; try { localStorage.setItem("pl-sales-sel", mon); } catch (e) {} slModel = ""; slQ = ""; slName = null; slOpenParts = {}; slPick(); }
+slMigrate(); slPick();
 function slN(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 function slFmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString("en-US"); }
 function slStr(v) { return String(v == null ? "" : v).trim(); }
@@ -1617,10 +1652,11 @@ function slParse(buf, fileName) {
   return { f: fileName, at: Date.now(), month: month, master: master, ins: ins, outs: outs };
 }
 
-function slCompute() {
-  var mon = sl.month, y = +mon.slice(0, 4), m = +mon.slice(5, 7), days = new Date(y, m, 0).getDate();
+function slCompute(D) {
+  D = D || sl;
+  var mon = D.month, y = +mon.slice(0, 4), m = +mon.slice(5, 7), days = new Date(y, m, 0).getDate();
   var parts = {}, order = [], unreg = {}, outside = 0;
-  sl.master.forEach(function (x) { var k = whKey(x[2]); if (parts[k]) return; parts[k] = { model: x[0], name: x[1], p: x[2], prev: x[3], inQ: 0, inC: 0, outQ: 0, outC: 0, reg: true }; order.push(parts[k]); });
+  D.master.forEach(function (x) { var k = whKey(x[2]); if (parts[k]) return; parts[k] = { model: x[0], name: x[1], p: x[2], prev: x[3], inQ: 0, inC: 0, outQ: 0, outC: 0, reg: true }; order.push(parts[k]); });
   var daily = []; for (var d = 1; d <= days; d++) daily.push({ d: mon + "-" + (d < 10 ? "0" : "") + d, i: 0, o: 0 });
   function add(e, kind) {
     var k = whKey(e[1]), q = e[3];
@@ -1632,8 +1668,8 @@ function slCompute() {
     var day = daily[+e[0].slice(8, 10) - 1];
     if (day) { if (kind === "in") day.i += q; else day.o += q; }
   }
-  sl.ins.forEach(function (e) { add(e, "in"); });
-  sl.outs.forEach(function (e) { add(e, "out"); });
+  D.ins.forEach(function (e) { add(e, "in"); });
+  D.outs.forEach(function (e) { add(e, "out"); });
   var T = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
   order.forEach(function (P) {
     P.end = P.prev + P.inQ + P.inC - (P.outQ + P.outC);
@@ -1643,8 +1679,8 @@ function slCompute() {
   // 로트별: 시트 전체(엑셀과 같이 기준월과 상관없이)의 입고 − 출고
   var lots = {}, lotOrder = [];
   function lot(e) { var k = whKey(e[1]) + "|" + e[2]; if (!lots[k]) { lots[k] = { p: e[1], lot: e[2], i: 0, o: 0, first: "", hasIn: false }; lotOrder.push(lots[k]); } return lots[k]; }
-  sl.ins.forEach(function (e) { var L = lot(e); L.i += e[3]; if (e[3] > 0) { L.hasIn = true; if (!L.first || (e[0] && e[0] < L.first)) L.first = e[0]; } });
-  sl.outs.forEach(function (e) { lot(e).o += e[3]; });
+  D.ins.forEach(function (e) { var L = lot(e); L.i += e[3]; if (e[3] > 0) { L.hasIn = true; if (!L.first || (e[0] && e[0] < L.first)) L.first = e[0]; } });
+  D.outs.forEach(function (e) { lot(e).o += e[3]; });
   var lotIssues = 0;
   lotOrder.forEach(function (L) {
     L.bal = L.i - L.o;
@@ -1652,7 +1688,7 @@ function slCompute() {
     if (L.st === "over") lotIssues++;
   });
   var cancelBad = 0;   // 취소 대상(같은 품번 · 로트의 양수 입력)이 없는 취소
-  [["in", sl.ins], ["out", sl.outs]].forEach(function (pair) {
+  [["in", D.ins], ["out", D.outs]].forEach(function (pair) {
     pair[1].forEach(function (e) { if (e[3] < 0 && !pair[1].some(function (x) { return x[3] > 0 && whKey(x[1]) === whKey(e[1]) && x[2] === e[2]; })) cancelBad++; });
   });
   var negEnd = order.filter(function (P) { return P.end < 0; }).length;
@@ -1693,28 +1729,50 @@ function slEntryTable(list, kind, C) {
     }).join("") + "</tbody></table></div>";
 }
 
+// 연도 · 월 고르기 줄: 데이터가 있는 달만 누를 수 있습니다.
+function slPeriodBar() {
+  var ms = slMonths(), years = [];
+  ms.forEach(function (x) { var yy = x.slice(0, 4); if (years.indexOf(yy) < 0) years.push(yy); });
+  var cy = slCur.slice(0, 4), h = '<div class="sl-period"><label class="sl-year">연도 <select class="hist-select" id="sl-year" aria-label="연도">' +
+    years.map(function (yy) { return '<option value="' + yy + '"' + (yy === cy ? " selected" : "") + ">" + yy + "년</option>"; }).join("") + "</select></label><span class=\"sl-months\">";
+  for (var i = 1; i <= 12; i++) {
+    var key = cy + "-" + (i < 10 ? "0" : "") + i, has = ms.indexOf(key) >= 0;
+    h += '<button class="sl-mon" type="button" data-sl-month="' + key + '"' + (has ? "" : " disabled") + ' aria-pressed="' + (key === slCur) + '">' + i + "월</button>";
+  }
+  return h + '</span><button class="btn sl-del" type="button" data-sl-del="' + slCur + '">이 달 데이터 지우기</button></div>';
+}
 function slStatus(msg) { document.getElementById("wh-bar-status").textContent = msg; }
 function slRender() {
   var kp = document.getElementById("sl-kpis"), body = document.getElementById("sl-body");
   if (!sl) {
     kp.innerHTML = ""; kp.hidden = true;
     body.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">영업창고 월간 입출고 대장을 넣어 주세요</h3>' +
-      '<ol><li>매달 쓰는 <b>영업창고 입출고 엑셀</b>(입고 · 출고 · 집계 시트)을 그대로 넣습니다.</li><li>품목 · 품번별 재고(품번을 누르면 LOT별 재고), 입출고 내역이 정리되어 나오고 배치도도 함께 채워집니다.</li><li>새 내용을 입력한 뒤 같은 파일을 다시 넣으면 화면이 그 파일 기준으로 바뀝니다.</li></ol>' +
+      '<ol><li>매달 쓰는 <b>영업창고 입출고 엑셀</b>(입고 · 출고 · 집계 시트)을 그대로 넣습니다.</li><li>집계 시트의 <b>기준월</b>로 달마다 따로 저장되어, 연도 · 월을 골라 지난 데이터도 볼 수 있습니다.</li><li>품목 · 품번별 재고(품번을 누르면 LOT별 재고), 입출고 내역이 정리되어 나오고 배치도는 가장 최근 달로 채워집니다.</li><li>같은 달 파일을 다시 넣으면 그 달만 새 파일로 바뀝니다.</li></ol>' +
       '<button class="btn primary" type="button" data-sl-load>월간 입출고 엑셀 넣기</button></section>';
     return;
   }
-  var C = slCompute(), issues = C.unreg.length + C.outside + C.lotIssues + C.cancelBad + C.negEnd;
+  var C = slCompute(), latestMon = slMonths().slice(-1)[0];
+  // 월 넘김 확인: 이번 달 전월재고 = 지난달 월말재고 (지난달 데이터가 있을 때만)
+  var carry = [], prevD = slGet(slPrevMonth(sl.month));
+  if (prevD) {
+    var PC = slCompute(prevD), endOf = {};
+    PC.parts.forEach(function (P) { endOf[whKey(P.p)] = P.end; });
+    C.parts.forEach(function (P) { var e = endOf[whKey(P.p)] || 0; if (P.reg && Math.abs(e - P.prev) > 1e-9) carry.push(P.p + " (지난달 " + slFmt(e) + " · 이번 달 전월재고 " + slFmt(P.prev) + ")"); });
+  }
+  var issues = C.unreg.length + C.outside + C.lotIssues + C.cancelBad + C.negEnd + carry.length;
   kp.innerHTML = ""; kp.hidden = true;   // 요약 숫자 줄은 쓰지 않습니다(품목별 재고가 대신함). 입력 오류는 아래 경고 목록으로 보여 줍니다.
 
   var y = +sl.month.slice(0, 4), m = +sl.month.slice(5, 7);
-  var h = "";
+  var h = slPeriodBar();
+  if (sl.month !== latestMon) h += '<p class="sl-past" role="status"><b>지난 데이터: ' + y + "년 " + m + "월</b> · 배치도와 상자 수는 가장 최근 달(" + latestMon.slice(0, 4) + "년 " + (+latestMon.slice(5, 7)) + '월) 기준입니다. <button class="sl-linkbtn" type="button" data-sl-month="' + latestMon + '">최근 달로</button></p>';
   if (issues) {
     h += '<ul class="sl-issues">' +
       (C.unreg.length ? "<li>집계 시트에 없는 신규 품번 " + C.unreg.length + "개: " + esc(C.unreg.join(", ")) + " → 집계 시트에 차종 · 품명 · 품번 등록</li>" : "") +
       (C.outside ? "<li>기준월(" + sl.month + ") 밖 일자 " + C.outside + "건은 집계에서 빠졌습니다.</li>" : "") +
       (C.cancelBad ? "<li>같은 품번 · 로트의 원래 입력이 없는 취소 " + C.cancelBad + "건</li>" : "") +
       (C.lotIssues ? "<li>입고보다 출고가 많은 LOT " + C.lotIssues + "개 (품번별 재고에서 ‘LOT 확인’ 표시된 품번을 눌러 확인)</li>" : "") +
-      (C.negEnd ? "<li>월말재고가 마이너스인 품번 " + C.negEnd + "개</li>" : "") + "</ul>";
+      (C.negEnd ? "<li>월말재고가 마이너스인 품번 " + C.negEnd + "개</li>" : "") +
+      (carry.length ? "<li>지난달 월말재고와 이번 달 전월재고가 다른 품번 " + carry.length + "개: " + esc(carry.slice(0, 6).join(", ")) + (carry.length > 6 ? " 외 " + (carry.length - 6) + "개" : "") + "</li>" : "") + "</ul>";
   }
 
   var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
@@ -1799,11 +1857,15 @@ function slLoad(file) {
     var res;
     try { res = slParse(fr.result, file.name); } catch (e) { slStatus("파일을 읽지 못했습니다: " + file.name); return; }
     if (res.err) { slStatus(res.err + " (" + file.name + ")"); return; }
-    sl = res; slModel = ""; slQ = ""; slName = null;
-    var saved = slSave();
-    slSyncMap();
+    var mon = res.month, label = mon.slice(0, 4) + "년 " + (+mon.slice(5, 7)) + "월", old = slGet(mon);
+    if (old && !confirm(label + " 데이터가 이미 있습니다 (" + old.f + "). 이 파일로 바꿀까요? 다른 달은 그대로입니다.")) { slStatus(label + " 데이터를 바꾸지 않았습니다."); return; }
+    var saved = true;
+    try { localStorage.setItem(SL_PREFIX + mon, JSON.stringify(res)); } catch (e) { saved = false; }
+    if (!saved) { slStatus("저장하지 못했습니다(브라우저 저장 공간 부족?): " + file.name); return; }
+    slSetCur(mon);
+    if (mon === slMonths().slice(-1)[0]) slSyncMap();   // 가장 최근 달일 때만 배치도를 다시 그립니다
     slRender();
-    if (!saved) slStatus("화면에는 반영했지만 브라우저에 저장하지 못했습니다: " + file.name);
+    slStatus(label + " · " + file.name + (old ? " · 새 파일로 바꿨습니다" : " · 저장했습니다") + (mon === slMonths().slice(-1)[0] ? " · 배치도 반영" : " · 지난 달이라 배치도는 그대로"));
   };
   fr.readAsArrayBuffer(file);
 }
@@ -1815,8 +1877,19 @@ function slLoad(file) {
   var wrap = document.getElementById("sl-wrap");
   wrap.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("input, label")) return;
-    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part]") : null;
+    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part],[data-sl-month],[data-sl-del]") : null;
     if (!t) return;
+    if (t.hasAttribute("data-sl-month")) { slSetCur(t.getAttribute("data-sl-month")); slRender(); return; }
+    if (t.hasAttribute("data-sl-del")) {
+      var dm = t.getAttribute("data-sl-del"), dl = dm.slice(0, 4) + "년 " + (+dm.slice(5, 7)) + "월";
+      if (!confirm(dl + " 데이터를 지웁니다. 팀과 공유 중이면 모두에게서 지워집니다. 계속할까요?")) return;
+      var wasLatest = dm === slMonths().slice(-1)[0];
+      try { localStorage.removeItem(SL_PREFIX + dm); } catch (e2) {}
+      slPick();
+      if (wasLatest) { if (slLatest()) slSyncMap(); else { wh.slots = {}; wh.fromLedger = null; whSave(); } }
+      slRender(); slStatus(dl + " 데이터를 지웠습니다.");
+      return;
+    }
     if (t.hasAttribute("data-sl-part")) { var pk = whKey(t.getAttribute("data-sl-part")); if (slOpenParts[pk]) delete slOpenParts[pk]; else slOpenParts[pk] = 1; slRender(); return; }
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
     if (t.hasAttribute("data-sl-item-model")) { slItemModel = t.getAttribute("data-sl-item-model"); slRender(); return; }
@@ -1831,6 +1904,11 @@ function slLoad(file) {
   });
   wrap.addEventListener("toggle", function (e) { if (e.target.id === "sl-chart-fold") slChartOpen = e.target.open; }, true);
   wrap.addEventListener("change", function (e) {
+    if (e.target.id === "sl-year") {   // 연도를 바꾸면 그 해의 가장 최근 달로
+      var yy = e.target.value, inYear = slMonths().filter(function (x) { return x.slice(0, 4) === yy; });
+      if (inYear.length) { slSetCur(inYear[inYear.length - 1]); slRender(); }
+      return;
+    }
     if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); return; }
     var p = e.target.getAttribute && e.target.getAttribute("data-boxq");
     if (p == null) return;
@@ -1939,6 +2017,8 @@ document.getElementById("stamp").textContent =
   });
   var auth = firebase.auth(), col = firebase.firestore().collection("pml");
   var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1", "pl-boxq1"];
+  function isShared(k) { return KEYS.indexOf(k) >= 0 || /^pl-sales-\d{4}-\d{2}$/.test(k); }   // 영업창고 달별 키도 공유
+  function sharedLocalKeys() { var out = KEYS.slice(); try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^pl-sales-\d{4}-\d{2}$/.test(k)) out.push(k); } } catch (e) {} return out; }
   var META_KEY = "pl-sync-meta", MAX_BYTES = 950000;
   var rawSet = Storage.prototype.setItem, rawRemove = Storage.prototype.removeItem;
   var meta = {};   // 키별 { t: 내가 가진 판의 시각, d: 아직 서버에 못 올린 변경이 있으면 1 }
@@ -1955,12 +2035,12 @@ document.getElementById("stamp").textContent =
     timers[k] = setTimeout(function () { push(k); }, 400);
   }
   Storage.prototype.setItem = function (k, v) {
-    var shared = this === localStorage && KEYS.indexOf(k) >= 0, same = shared && this.getItem(k) === String(v);
+    var shared = this === localStorage && isShared(k), same = shared && this.getItem(k) === String(v);
     rawSet.call(this, k, v);
     if (shared && !same) changed(k);
   };
   Storage.prototype.removeItem = function (k) {
-    var shared = this === localStorage && KEYS.indexOf(k) >= 0, had = shared && this.getItem(k) !== null;
+    var shared = this === localStorage && isShared(k), had = shared && this.getItem(k) !== null;
     rawRemove.call(this, k);
     if (had) changed(k);
   };
@@ -1995,7 +2075,9 @@ document.getElementById("stamp").textContent =
         } else if (k === "pl-boxq1") {
           try { boxq = JSON.parse(v || "{}") || {}; } catch (e) { boxq = {}; }
         } else if (k === "pl-sales1") {
-          try { sl = JSON.parse(v || "null"); } catch (e) { sl = null; }
+          slMigrate(); slPick();   // 예전 형식이 서버에서 오면 달별로 옮깁니다
+        } else if (/^pl-sales-\d{4}-\d{2}$/.test(k)) {
+          slPick();
         } else if (k === "pl-hist1") {
           try { hist = JSON.parse(v || "{}") || {}; } catch (e) { hist = {}; }
         } else {
@@ -2012,7 +2094,7 @@ document.getElementById("stamp").textContent =
     var applied = [], seen = {};
     snap.docChanges().forEach(function (ch) {
       var k = ch.doc.id;
-      if (KEYS.indexOf(k) < 0 || ch.type === "removed") return;
+      if (!isShared(k) || ch.type === "removed") return;
       seen[k] = 1;
       if (ch.doc.metadata.hasPendingWrites) return;
       var data = ch.doc.data(), rv = typeof data.v === "string" ? data.v : null, rt = Number(data.t) || 0;
@@ -2023,7 +2105,7 @@ document.getElementById("stamp").textContent =
       meta[k] = { t: rt, d: 0 };
       applied.push(k);
     });
-    if (first) KEYS.forEach(function (k) { if (!seen[k] && localGet(k) !== null) push(k); });   // 서버에 아직 없는 데이터는 내 것을 올립니다
+    if (first) sharedLocalKeys().forEach(function (k) { if (!seen[k] && localGet(k) !== null) push(k); });   // 서버에 아직 없는 데이터는 내 것을 올립니다
     metaSave();
     if (applied.length) refresh(applied);
   }
