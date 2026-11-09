@@ -253,13 +253,6 @@ tr.open .sl-caret { transform: rotate(90deg); }
 .sl-two > * { min-width: 0; }
 .sl-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .sl-year { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.sl-months { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.sl-mon { appearance: none; font: inherit; font-size: 13px; font-weight: 500; min-width: 46px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; cursor: pointer; font-variant-numeric: tabular-nums; }
-.sl-mon:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.sl-mon:disabled { color: var(--muted); opacity: 0.45; cursor: default; background: transparent; }
-.sl-mon[aria-pressed="true"], .sl-mon[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
-.sl-mon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.sl-del { margin-left: auto; }
 .sl-past { margin: 0; padding: 10px 14px; border-radius: 5px; border: 1px solid var(--s1); background: color-mix(in srgb, var(--s1) 10%, transparent); font-size: 13px; }
 .sl-linkbtn { appearance: none; border: 0; background: none; font: inherit; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; padding: 0 2px; }
 .sl-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -1588,13 +1581,14 @@ function slMigrate() {   // 예전 한 달짜리 저장 → 그 달 키로
 }
 var slCur = "";   // 보고 있는 달
 try { slCur = localStorage.getItem("pl-sales-sel") || ""; } catch (e) {}
-function slPick() {   // 보고 있는 달을 다시 읽습니다. 없어진 달이면 가장 최근 달로.
-  var ms = slMonths();
-  if (ms.indexOf(slCur) < 0) slCur = ms.length ? ms[ms.length - 1] : "";
-  sl = slCur ? slGet(slCur) : null;
+function slPick() {   // 보고 있는 달을 다시 읽습니다. 고른 달이 없으면 가장 최근 데이터 달(데이터가 하나도 없으면 이번 달).
+  if (!/^\d{4}-\d{2}$/.test(slCur)) { var ms = slMonths(); slCur = ms.length ? ms[ms.length - 1] : whYmd(new Date()).slice(0, 7); }
+  sl = slGet(slCur);
 }
 function slSetCur(mon) { slCur = mon; try { localStorage.setItem("pl-sales-sel", mon); } catch (e) {} slModel = ""; slQ = ""; slName = null; slOpenParts = {}; slPick(); }
-slMigrate(); slPick();
+slMigrate();
+if (!slGet(slCur)) slCur = "";   // 처음 열 때는 데이터가 있는 가장 최근 달로
+slPick();
 function slN(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 function slFmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString("en-US"); }
 function slStr(v) { return String(v == null ? "" : v).trim(); }
@@ -1729,21 +1723,43 @@ function slEntryTable(list, kind, C) {
     }).join("") + "</tbody></table></div>";
 }
 
-// 연도 · 월 고르기 줄: 데이터가 있는 달만 누를 수 있습니다.
+// 연도 · 월 고르기: 둘 다 펼쳐서 고릅니다. 연도는 데이터를 처음 넣은 해부터 올해까지, 월은 올해면 이번 달까지.
+// 데이터가 있는 달은 "· 있음"으로 표시합니다. 데이터가 없는 달도 고를 수 있고, 그때는 그 달 엑셀을 넣으라고 안내합니다.
+function slNowMon() { return whYmd(new Date()).slice(0, 7); }
+function slYears() {
+  var ms = slMonths(), now = slNowMon(), ny = +now.slice(0, 4);
+  var y0 = Math.min(ms.length ? +ms[0].slice(0, 4) : ny, ny), y1 = Math.max(ms.length ? +ms[ms.length - 1].slice(0, 4) : ny, ny), out = [];
+  for (var y = y0; y <= y1; y++) out.push(String(y));
+  return out;
+}
+function slMonthsOfYear(yy) {   // 그 해에 고를 수 있는 달 (올해는 이번 달까지, 그보다 뒤 달에 데이터가 있으면 그 달까지)
+  var now = slNowMon(), last = 12, ms = slMonths();
+  if (yy === now.slice(0, 4)) last = +now.slice(5, 7);
+  if (+yy > +now.slice(0, 4)) last = 0;
+  ms.forEach(function (x) { if (x.slice(0, 4) === yy) last = Math.max(last, +x.slice(5, 7)); });
+  var out = []; for (var m = 1; m <= last; m++) out.push(yy + "-" + (m < 10 ? "0" : "") + m);
+  return out;
+}
 function slPeriodBar() {
-  var ms = slMonths(), years = [];
-  ms.forEach(function (x) { var yy = x.slice(0, 4); if (years.indexOf(yy) < 0) years.push(yy); });
-  var cy = slCur.slice(0, 4), h = '<div class="sl-period"><label class="sl-year">연도 <select class="hist-select" id="sl-year" aria-label="연도">' +
-    years.map(function (yy) { return '<option value="' + yy + '"' + (yy === cy ? " selected" : "") + ">" + yy + "년</option>"; }).join("") + "</select></label><span class=\"sl-months\">";
-  for (var i = 1; i <= 12; i++) {
-    var key = cy + "-" + (i < 10 ? "0" : "") + i, has = ms.indexOf(key) >= 0;
-    h += '<button class="sl-mon" type="button" data-sl-month="' + key + '"' + (has ? "" : " disabled") + ' aria-pressed="' + (key === slCur) + '">' + i + "월</button>";
-  }
-  return h + '</span><button class="btn sl-del" type="button" data-sl-del="' + slCur + '">이 달 데이터 지우기</button></div>';
+  var ms = slMonths(), cy = slCur.slice(0, 4);
+  return '<div class="sl-period"><label class="sl-year">연도 <select class="hist-select" id="sl-year" aria-label="연도">' +
+    slYears().map(function (yy) { var n = ms.filter(function (x) { return x.slice(0, 4) === yy; }).length; return '<option value="' + yy + '"' + (yy === cy ? " selected" : "") + ">" + yy + "년" + (n ? "" : " · 데이터 없음") + "</option>"; }).join("") +
+    '</select></label><label class="sl-year">월 <select class="hist-select" id="sl-month" aria-label="월">' +
+    slMonthsOfYear(cy).map(function (k) { return '<option value="' + k + '"' + (k === slCur ? " selected" : "") + ">" + (+k.slice(5, 7)) + "월" + (ms.indexOf(k) >= 0 ? "" : " · 데이터 없음") + "</option>"; }).join("") +
+    "</select></label></div>";
 }
 function slStatus(msg) { document.getElementById("wh-bar-status").textContent = msg; }
 function slRender() {
   var kp = document.getElementById("sl-kpis"), body = document.getElementById("sl-body");
+  if (!sl && slMonths().length) {   // 고른 달에 데이터가 없을 때
+    kp.innerHTML = ""; kp.hidden = true;
+    var lm = slMonths().slice(-1)[0], cl = slCur.slice(0, 4) + "년 " + (+slCur.slice(5, 7)) + "월";
+    body.innerHTML = slPeriodBar() + '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">' + cl + ' 데이터가 없습니다</h3>' +
+      '<p class="sum-hint">이 달의 영업창고 입출고 엑셀을 넣으면 여기에 저장됩니다. 가장 최근 데이터는 ' + lm.slice(0, 4) + "년 " + (+lm.slice(5, 7)) + '월입니다.</p>' +
+      '<div class="sheet-tools"><button class="btn primary" type="button" data-sl-load>월간 입출고 엑셀 넣기</button><button class="btn" type="button" data-sl-month="' + lm + '">최근 데이터 보기</button></div></section>';
+    slStatus(cl + " · 데이터 없음");
+    return;
+  }
   if (!sl) {
     kp.innerHTML = ""; kp.hidden = true;
     body.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">영업창고 월간 입출고 대장을 넣어 주세요</h3>' +
@@ -1877,19 +1893,9 @@ function slLoad(file) {
   var wrap = document.getElementById("sl-wrap");
   wrap.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("input, label")) return;
-    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part],[data-sl-month],[data-sl-del]") : null;
+    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part],[data-sl-month]") : null;
     if (!t) return;
     if (t.hasAttribute("data-sl-month")) { slSetCur(t.getAttribute("data-sl-month")); slRender(); return; }
-    if (t.hasAttribute("data-sl-del")) {
-      var dm = t.getAttribute("data-sl-del"), dl = dm.slice(0, 4) + "년 " + (+dm.slice(5, 7)) + "월";
-      if (!confirm(dl + " 데이터를 지웁니다. 팀과 공유 중이면 모두에게서 지워집니다. 계속할까요?")) return;
-      var wasLatest = dm === slMonths().slice(-1)[0];
-      try { localStorage.removeItem(SL_PREFIX + dm); } catch (e2) {}
-      slPick();
-      if (wasLatest) { if (slLatest()) slSyncMap(); else { wh.slots = {}; wh.fromLedger = null; whSave(); } }
-      slRender(); slStatus(dl + " 데이터를 지웠습니다.");
-      return;
-    }
     if (t.hasAttribute("data-sl-part")) { var pk = whKey(t.getAttribute("data-sl-part")); if (slOpenParts[pk]) delete slOpenParts[pk]; else slOpenParts[pk] = 1; slRender(); return; }
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
     if (t.hasAttribute("data-sl-item-model")) { slItemModel = t.getAttribute("data-sl-item-model"); slRender(); return; }
@@ -1904,11 +1910,12 @@ function slLoad(file) {
   });
   wrap.addEventListener("toggle", function (e) { if (e.target.id === "sl-chart-fold") slChartOpen = e.target.open; }, true);
   wrap.addEventListener("change", function (e) {
-    if (e.target.id === "sl-year") {   // 연도를 바꾸면 그 해의 가장 최근 달로
-      var yy = e.target.value, inYear = slMonths().filter(function (x) { return x.slice(0, 4) === yy; });
-      if (inYear.length) { slSetCur(inYear[inYear.length - 1]); slRender(); }
+    if (e.target.id === "sl-year") {   // 연도를 바꾸면 그 해의 가장 최근 데이터 달로(없으면 그 해 마지막으로 고를 수 있는 달)
+      var yy = e.target.value, inYear = slMonths().filter(function (x) { return x.slice(0, 4) === yy; }), opts = slMonthsOfYear(yy);
+      slSetCur(inYear.length ? inYear[inYear.length - 1] : opts[opts.length - 1]); slRender();
       return;
     }
+    if (e.target.id === "sl-month") { slSetCur(e.target.value); slRender(); return; }
     if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); return; }
     var p = e.target.getAttribute && e.target.getAttribute("data-boxq");
     if (p == null) return;
