@@ -198,6 +198,42 @@ body.view-plan main { padding-bottom: 14px; }
 .hist-details summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0 8px; }
 .hist-del { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
 .hist-del:hover { color: #c62828; }
+/* ── 영업창고 현황: 월간 입출고 대장(입고 · 출고 · 집계 시트) ── */
+.sl-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.sl-kpi.warn b { color: #b26a00; }
+.sl-kpi.ok b { color: var(--accent); }
+.sl-chart svg { display: block; width: 100%; height: 220px; font-family: var(--font-ui); }
+.sl-chart .grid { stroke: var(--line); stroke-width: 1; }
+.sl-chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.sl-chart .ax.we { fill: #e5484d; }
+.sl-chart .vl { fill: var(--fg); font-size: 10px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.sl-chart rect.bi { fill: var(--s1); } .sl-chart rect.bo { fill: var(--s2); }
+.sl-chart rect.hit { fill: transparent; } .sl-chart rect.hit:hover { fill: var(--accent-soft); fill-opacity: 0.5; }
+.sl-chart .base { stroke: var(--muted); stroke-width: 1; }
+.sl-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.sl-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.sl-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.sl-chip { appearance: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--muted); background: var(--slot); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.sl-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.sl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sl-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.sl-issues { margin: 0; padding: 10px 14px 10px 30px; border: 1px solid #e7c27a; background: rgba(178, 106, 0, 0.08); border-radius: 5px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.sum-table td.neg { color: #c62828; font-weight: 700; }
+.sum-table td.cx { color: #c62828; }
+.sum-table td.end { font-weight: 700; border-left: 1px solid var(--line); }
+.sum-table td.mono, .sum-table th.mono { font-family: var(--font-mono); font-size: 12px; }
+.sl-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--slot); border: 1px solid var(--line); color: var(--muted); }
+.sl-tag.ok { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.sl-tag.warn { color: #b26a00; border-color: #e7c27a; background: rgba(178, 106, 0, 0.08); }
+.sl-tag.bad { color: #c62828; border-color: #e8a1a1; background: rgba(198, 40, 40, 0.07); }
+.sl-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.sl-two > * { min-width: 0; }
+#sl-body { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.sl-two .sum-table thead th { white-space: nowrap; }
+.sl-empty { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.sl-empty ol { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 1000px) { .sl-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sl-two { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .sl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .wh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wh-io { grid-template-columns: 1fr; } }
 @media (max-width: 860px) {
   .slot, .slot.wide { grid-column: span 6; }
@@ -344,13 +380,21 @@ body.view-plan main { padding-bottom: 14px; }
   <div id="wh-wrap" hidden>
     <div class="subbar" id="wh-bar">
       <div class="subtabs" role="tablist" aria-label="보기">
+        <button class="subtab" role="tab" type="button" data-wview="sales">영업창고 현황</button>
         <button class="subtab" role="tab" type="button" data-wview="map">배치도</button>
         <button class="subtab" role="tab" type="button" data-wview="stock">재고</button>
         <button class="subtab" role="tab" type="button" data-wview="io">입출고 처리</button>
       </div>
       <span class="sheet-status" id="wh-bar-status"></span>
+      <button class="btn primary" id="sl-bar-load" type="button">월간 입출고 엑셀 넣기</button>
+      <input type="file" id="sl-file" accept=".xlsx,.xlsm,.xls" hidden>
       <button class="btn primary" id="wh-bar-in" type="button">입고 엑셀 넣기</button>
       <button class="btn primary" id="wh-bar-out" type="button">출고 엑셀 넣기</button>
+    </div>
+
+    <div id="sl-wrap" class="sl-wrap" style="display:flex;flex-direction:column;gap:22px;min-width:0">
+      <div class="sl-kpis" id="sl-kpis"></div>
+      <div id="sl-body"></div>
     </div>
 
     <div class="wh-kpis" id="wh-kpis"></div>
@@ -1336,8 +1380,8 @@ function whApply(kind, rows, fileName) {
 }
 function whStatus(msg) { document.getElementById("wh-status").textContent = msg; document.getElementById("wh-bar-status").textContent = msg; }
 // 물류창고의 작은 탭: 배치도(요약 숫자 + 도면) / 재고 / 입출고 처리(파일 넣기 + 내역). 위쪽 모양은 생산관리 화면과 같습니다.
-var whView = "map";
-try { var wv = localStorage.getItem("pl-whview"); if (wv === "map" || wv === "stock" || wv === "io") whView = wv; } catch (e) {}
+var whView = "sales";
+try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "io") whView = wv; } catch (e) {}
 var whTabs = document.querySelectorAll("#wh-bar .subtab");
 function whApplyView() {
   document.getElementById("wh-kpis").hidden = whView !== "map";
@@ -1346,6 +1390,12 @@ function whApplyView() {
   document.getElementById("wh-sec-io").hidden = whView !== "io";
   document.getElementById("wh-sec-log").hidden = whView !== "io";
   document.getElementById("wh-bar-status").hidden = whView === "io";
+  document.getElementById("sl-wrap").hidden = whView !== "sales";
+  document.getElementById("sl-bar-load").hidden = whView !== "sales";
+  document.getElementById("wh-bar-in").hidden = whView === "sales";
+  document.getElementById("wh-bar-out").hidden = whView === "sales";
+  if (whView === "sales" && typeof slRender === "function") slRender();
+  else if (whView !== "sales" && document.getElementById("wh-status").textContent) whStatus(document.getElementById("wh-status").textContent);
   whTabs.forEach(function (b) { b.setAttribute("aria-selected", b.dataset.wview === whView ? "true" : "false"); });
 }
 whTabs.forEach(function (b) {
@@ -1426,6 +1476,251 @@ document.getElementById("wh-lines").addEventListener("change", function (e) {
 var whSearchTimer = null;
 document.getElementById("wh-search").addEventListener("input", function () { clearTimeout(whSearchTimer); whSearchTimer = setTimeout(whRender, 120); });
 
+// ── 영업창고 현황 ──
+// 월간 입출고 대장 엑셀(1.입고 · 2.출고 · 3.집계 시트)을 읽어 품번별 재고 · 일자별 입출고 · 로트 잔량 · 입출고 내역으로 보여 줍니다.
+// 계산은 엑셀 집계 시트와 같은 규칙입니다: 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소). 취소는 마이너스 수량, 기준월 밖 일자는 집계에서 뺍니다.
+var SL_KEY = "pl-sales1";
+var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
+var slModel = "", slActiveOnly = true, slQ = "";
+try { sl = JSON.parse(localStorage.getItem(SL_KEY) || "null"); } catch (e) { sl = null; }
+function slSave() { try { localStorage.setItem(SL_KEY, JSON.stringify(sl)); return true; } catch (e) { return false; } }
+function slN(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+function slFmt(n) { return (Math.round(n * 1000) / 1000).toLocaleString("en-US"); }
+function slStr(v) { return String(v == null ? "" : v).trim(); }
+
+function slFindHeader(rows, need) {
+  for (var r = 0; r < Math.min(rows.length, 15); r++) {
+    var line = rows[r].map(slStr);
+    if (need.every(function (re) { return line.some(function (t) { return re.test(t); }); })) return r;
+  }
+  return -1;
+}
+function slCol(row, re) { for (var i = 0; i < row.length; i++) if (re.test(slStr(row[i]))) return i; return -1; }
+function slEntries(ws) {
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+  var hr = slFindHeader(rows, [/품번/, /수량|cantidad/i, /일자|fecha/i]);   // 위쪽 안내 칸에도 ‘품번’ · ‘수량’ 글자가 있어 일자까지 있는 행을 머리글로 봅니다
+  if (hr < 0) return null;
+  var H = rows[hr];
+  var c = { d: slCol(H, /일자|fecha/i), p: slCol(H, /품번/), lot: slCol(H, /로트|롯트|lote/i), q: slCol(H, /수량|cantidad/i), w: slCol(H, /입고처|출고처|origen|destino/i), note: slCol(H, /비고|observ/i) };
+  var out = [];
+  for (var r = hr + 1; r < rows.length; r++) {
+    var R = rows[r], p = slStr(R[c.p]), q = Number(R[c.q]);
+    if (!p || !isFinite(q) || q === 0 || R[c.q] === "") continue;
+    out.push([c.d >= 0 ? whDate(R[c.d]) : "", p, c.lot >= 0 ? slStr(R[c.lot]) : "", q, c.w >= 0 ? slStr(R[c.w]) : "", c.note >= 0 ? slStr(R[c.note]) : ""]);
+  }
+  return out;
+}
+function slParse(buf, fileName) {
+  var wb = XLSX.read(buf, { type: "array" });
+  var find = function (re) { var n = wb.SheetNames.filter(function (x) { return re.test(x); })[0]; return n ? wb.Sheets[n] : null; };
+  var wsIn = find(/entrada|입고/i), wsOut = find(/salida|출고/i), wsSum = find(/resumen|집계/i);
+  if (!wsIn || !wsOut) return { err: "‘입고’ · ‘출고’ 시트를 찾지 못했습니다. 영업창고 입출고 대장 파일인지 확인해 주세요." };
+  var ins = slEntries(wsIn), outs = slEntries(wsOut);
+  if (!ins || !outs) return { err: "입고 · 출고 시트에서 ‘품번’ · ‘수량’ 머리글을 찾지 못했습니다." };
+  var master = [], month = "";
+  if (wsSum) {
+    var rows = XLSX.utils.sheet_to_json(wsSum, { header: 1, raw: true, defval: "" });
+    for (var r = 0; r < Math.min(rows.length, 6) && !month; r++) rows[r].some(function (v) { var d = whDate(v); if (d) { month = d.slice(0, 7); return true; } return false; });
+    var hr = slFindHeader(rows, [/품번/, /차종/]);
+    if (hr >= 0) {
+      var H = rows[hr], cm = slCol(H, /차종/), cn = slCol(H, /품명/), cp = slCol(H, /품번/), cprev = -1;
+      for (var k = hr; k <= hr + 1 && cprev < 0; k++) cprev = slCol(rows[k] || [], /전월\s*재고/);
+      for (r = hr + 1; r < rows.length; r++) {
+        var p = slStr(rows[r][cp]);
+        if (!p || /total|합계/i.test(slStr(rows[r][0]))) continue;
+        if (!/\d/.test(p)) continue;
+        master.push([slStr(rows[r][cm]), slStr(rows[r][cn]), p, cprev >= 0 ? slN(rows[r][cprev]) : 0]);
+      }
+    }
+  }
+  if (!month) {   // 집계 시트가 없으면 가장 많이 나온 달
+    var cnt = {};
+    ins.concat(outs).forEach(function (e) { if (e[0]) cnt[e[0].slice(0, 7)] = (cnt[e[0].slice(0, 7)] || 0) + 1; });
+    month = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; })[0] || whYmd(new Date()).slice(0, 7);
+  }
+  return { f: fileName, at: Date.now(), month: month, master: master, ins: ins, outs: outs };
+}
+
+function slCompute() {
+  var mon = sl.month, y = +mon.slice(0, 4), m = +mon.slice(5, 7), days = new Date(y, m, 0).getDate();
+  var parts = {}, order = [], unreg = {}, outside = 0;
+  sl.master.forEach(function (x) { var k = whKey(x[2]); if (parts[k]) return; parts[k] = { model: x[0], name: x[1], p: x[2], prev: x[3], inQ: 0, inC: 0, outQ: 0, outC: 0, reg: true }; order.push(parts[k]); });
+  var daily = []; for (var d = 1; d <= days; d++) daily.push({ d: mon + "-" + (d < 10 ? "0" : "") + d, i: 0, o: 0 });
+  function add(e, kind) {
+    var k = whKey(e[1]), q = e[3];
+    if (!parts[k]) { parts[k] = { model: "", name: "", p: e[1], prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, reg: false }; order.push(parts[k]); }
+    if (!parts[k].reg) unreg[k] = 1;
+    if (!e[0] || e[0].slice(0, 7) !== mon) { outside++; return; }
+    var P = parts[k];
+    if (kind === "in") { if (q > 0) P.inQ += q; else P.inC += q; } else { if (q > 0) P.outQ += q; else P.outC += q; }
+    var day = daily[+e[0].slice(8, 10) - 1];
+    if (day) { if (kind === "in") day.i += q; else day.o += q; }
+  }
+  sl.ins.forEach(function (e) { add(e, "in"); });
+  sl.outs.forEach(function (e) { add(e, "out"); });
+  var T = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
+  order.forEach(function (P) {
+    P.end = P.prev + P.inQ + P.inC - (P.outQ + P.outC);
+    P.active = P.prev || P.inQ || P.inC || P.outQ || P.outC || P.end;
+    ["prev", "inQ", "inC", "outQ", "outC", "end"].forEach(function (f) { T[f] += P[f]; });
+  });
+  // 로트별: 시트 전체(엑셀과 같이 기준월과 상관없이)의 입고 − 출고
+  var lots = {}, lotOrder = [];
+  function lot(e) { var k = whKey(e[1]) + "|" + e[2]; if (!lots[k]) { lots[k] = { p: e[1], lot: e[2], i: 0, o: 0, first: "", hasIn: false }; lotOrder.push(lots[k]); } return lots[k]; }
+  sl.ins.forEach(function (e) { var L = lot(e); L.i += e[3]; if (e[3] > 0) { L.hasIn = true; if (!L.first || (e[0] && e[0] < L.first)) L.first = e[0]; } });
+  sl.outs.forEach(function (e) { lot(e).o += e[3]; });
+  var lotIssues = 0;
+  lotOrder.forEach(function (L) {
+    L.bal = L.i - L.o;
+    L.st = !L.hasIn ? "noin" : L.bal < 0 ? "over" : L.bal === 0 ? "zero" : "ok";
+    if (L.st === "over") lotIssues++;
+  });
+  var cancelBad = 0;   // 취소 대상(같은 품번 · 로트의 양수 입력)이 없는 취소
+  [["in", sl.ins], ["out", sl.outs]].forEach(function (pair) {
+    pair[1].forEach(function (e) { if (e[3] < 0 && !pair[1].some(function (x) { return x[3] > 0 && whKey(x[1]) === whKey(e[1]) && x[2] === e[2]; })) cancelBad++; });
+  });
+  var negEnd = order.filter(function (P) { return P.end < 0; }).length;
+  return { days: days, parts: order, daily: daily, T: T, lots: lotOrder, unreg: Object.keys(unreg), outside: outside, lotIssues: lotIssues, cancelBad: cancelBad, negEnd: negEnd };
+}
+
+function slChart(daily) {
+  var W = 980, H = 220, L = 40, R = 10, Tp = 18, B = 26, max = 0;
+  daily.forEach(function (d) { max = Math.max(max, d.i, d.o); });
+  if (!max) return '<p class="sum-hint">이번 달에 들어온 입고 · 출고가 아직 없습니다.</p>';
+  var step = Math.pow(10, Math.floor(Math.log10(max))), nice = [1, 2, 2.5, 5, 10].map(function (k) { return k * step; }).filter(function (v) { return v * 4 >= max; })[0] || step * 10;
+  var top = Math.ceil(max / nice) * nice, ph = H - Tp - B, cw = (W - L - R) / daily.length, bw = Math.max(3, Math.min(14, cw * 0.32));
+  var yv = function (v) { return Tp + ph - Math.max(0, v) / top * ph; };
+  var h = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="일자별 입고 · 출고 수량">';
+  for (var t = 0; t <= top + 1e-9; t += nice) h += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv(t) + '" y2="' + yv(t) + '"/><text class="ax" x="' + (L - 6) + '" y="' + yv(t) + '" text-anchor="end" dominant-baseline="central">' + slFmt(t) + "</text>";
+  daily.forEach(function (d, i) {
+    var cx = L + cw * i + cw / 2, dt = new Date(+d.d.slice(0, 4), +d.d.slice(5, 7) - 1, +d.d.slice(8, 10)), we = dt.getDay() === 0 || dt.getDay() === 6;
+    if (d.i > 0) h += '<rect class="bi" x="' + (cx - bw - 1) + '" y="' + yv(d.i) + '" width="' + bw + '" height="' + (yv(0) - yv(d.i)) + '" rx="1.5"/>';
+    if (d.o > 0) h += '<rect class="bo" x="' + (cx + 1) + '" y="' + yv(d.o) + '" width="' + bw + '" height="' + (yv(0) - yv(d.o)) + '" rx="1.5"/>';
+    if (d.i > 0 && cw > 22) h += '<text class="vl" x="' + (cx - bw / 2 - 1) + '" y="' + (yv(d.i) - 4) + '">' + slFmt(d.i) + "</text>";
+    if (d.o > 0 && cw > 22) h += '<text class="vl" x="' + (cx + bw / 2 + 1) + '" y="' + (yv(d.o) - 4) + '">' + slFmt(d.o) + "</text>";
+    if (i % (cw < 18 ? 2 : 1) === 0 || i === daily.length - 1) h += '<text class="ax' + (we ? " we" : "") + '" x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + "</text>";
+    h += '<rect class="hit" x="' + (L + cw * i) + '" y="' + Tp + '" width="' + cw + '" height="' + ph + '"><title>' + d.d + " · 입고 " + slFmt(d.i) + " · 출고 " + slFmt(d.o) + "</title></rect>";
+  });
+  h += '<line class="base" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv(0) + '" y2="' + yv(0) + '"/>';
+  return h + "</svg>";
+}
+function slCell(v, cls) { return '<td class="' + (cls || "") + (v === 0 ? " z" : "") + '">' + (v === 0 ? "0" : slFmt(v)) + "</td>"; }
+function slEntryTable(list, kind, C) {
+  if (!list.length) return '<p class="sum-hint">' + (kind === "in" ? "입고" : "출고") + " 내역이 없습니다.</p>";
+  var master = {}; C.parts.forEach(function (P) { master[whKey(P.p)] = P; });
+  var rows = list.map(function (e, i) { return [e, i]; }).sort(function (a, b) { return a[0][0] < b[0][0] ? 1 : a[0][0] > b[0][0] ? -1 : b[1] - a[1]; });
+  return '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">일자</th><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th class="l">로트</th><th>수량</th><th class="l">' + (kind === "in" ? "입고처" : "출고처") + '</th><th class="l">비고</th></tr></thead><tbody>' +
+    rows.map(function (x) {
+      var e = x[0], P = master[whKey(e[1])] || {}, out = !e[0] || e[0].slice(0, 7) !== sl.month;
+      return '<tr><td class="l mono">' + esc(e[0] || "–") + (out ? ' <span class="sl-tag warn">기준월 외</span>' : "") + '</td><td class="l">' + esc(P.model || "") + '</td><td class="l">' + esc(P.name || "") + '</td><td class="l mono">' + esc(e[1]) + (P.reg === false ? ' <span class="sl-tag bad">미등록</span>' : "") + '</td><td class="l mono">' + esc(e[2]) + "</td>" +
+        '<td class="' + (e[3] < 0 ? "cx" : "") + '">' + slFmt(e[3]) + (e[3] < 0 ? ' <span class="sl-tag bad">취소</span>' : "") + '</td><td class="l">' + esc(e[4]) + '</td><td class="l">' + esc(e[5]) + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+}
+
+function slStatus(msg) { document.getElementById("wh-bar-status").textContent = msg; }
+function slRender() {
+  var kp = document.getElementById("sl-kpis"), body = document.getElementById("sl-body");
+  if (!sl) {
+    kp.innerHTML = ""; kp.hidden = true;
+    body.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">영업창고 월간 입출고 대장을 넣어 주세요</h3>' +
+      '<ol><li>매달 쓰는 <b>영업창고 입출고 엑셀</b>(입고 · 출고 · 집계 시트)을 그대로 넣습니다.</li><li>품번별 월말재고, 일자별 입고 · 출고, 로트별 잔량, 입출고 내역이 정리되어 나옵니다.</li><li>새 내용을 입력한 뒤 같은 파일을 다시 넣으면 화면이 그 파일 기준으로 바뀝니다.</li></ol>' +
+      '<button class="btn primary" type="button" data-sl-load>월간 입출고 엑셀 넣기</button></section>';
+    return;
+  }
+  var C = slCompute(), issues = C.unreg.length + C.outside + C.lotIssues + C.cancelBad + C.negEnd;
+  kp.hidden = false;
+  kp.innerHTML =
+    '<div class="wh-kpi"><span>전월재고</span><b>' + slFmt(C.T.prev) + "</b></div>" +
+    '<div class="wh-kpi"><span>당월 입고 <small>(취소 차감)</small></span><b>' + slFmt(C.T.inQ + C.T.inC) + "</b></div>" +
+    '<div class="wh-kpi"><span>당월 출고 <small>(취소 차감)</small></span><b>' + slFmt(C.T.outQ + C.T.outC) + "</b></div>" +
+    '<div class="wh-kpi"><span>월말재고</span><b>' + slFmt(C.T.end) + " <small>" + C.parts.filter(function (P) { return P.end; }).length + "개 품번</small></b></div>" +
+    '<div class="wh-kpi sl-kpi ' + (issues ? "warn" : "ok") + '"><span>입력 점검</span><b>' + (issues ? issues + " <small>건 확인 필요</small>" : "정상") + "</b></div>";
+
+  var y = +sl.month.slice(0, 4), m = +sl.month.slice(5, 7);
+  var h = "";
+  if (issues) {
+    h += '<ul class="sl-issues">' +
+      (C.unreg.length ? "<li>집계 시트에 없는 신규 품번 " + C.unreg.length + "개: " + esc(C.unreg.join(", ")) + " → 집계 시트에 차종 · 품명 · 품번 등록</li>" : "") +
+      (C.outside ? "<li>기준월(" + sl.month + ") 밖 일자 " + C.outside + "건은 집계에서 빠졌습니다.</li>" : "") +
+      (C.cancelBad ? "<li>같은 품번 · 로트의 원래 입력이 없는 취소 " + C.cancelBad + "건</li>" : "") +
+      (C.lotIssues ? "<li>입고보다 출고가 많은 로트 " + C.lotIssues + "개 (아래 로트별 잔량 확인)</li>" : "") +
+      (C.negEnd ? "<li>월말재고가 마이너스인 품번 " + C.negEnd + "개</li>" : "") + "</ul>";
+  }
+  // 일자별 그래프
+  h += '<section class="sheet-panel sl-chart"><div class="sheet-top"><div><h3>일자별 입고 · 출고</h3><span class="sheet-status">' + y + "년 " + m + "월 · 취소 차감 수량</span></div>" +
+    '<div class="sl-legend"><span><i style="background:var(--s1)"></i>입고</span><span><i style="background:var(--s2)"></i>출고</span></div></div>' + slChart(C.daily) + "</section>";
+
+  // 품번별 재고
+  var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
+  if (slModel && models.indexOf(slModel) < 0) slModel = "";
+  var q = slQ.toUpperCase();
+  var list = C.parts.filter(function (P) { return (!slModel || P.model === slModel) && (!slActiveOnly || P.active || !P.reg) && (!q || (P.p + " " + P.name).toUpperCase().indexOf(q) >= 0); });
+  var S = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
+  list.forEach(function (P) { for (var f in S) S[f] += P[f]; });
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소)</span></div>" +
+    '<div class="sheet-tools"><span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>" +
+    '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>" +
+    '<input class="sheet-search" id="sl-search" type="search" placeholder="품번 · 품명 찾기" aria-label="품번 · 품명 찾기" value="' + esc(slQ) + '"></div></div>';
+  h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th></tr></thead><tbody>' +
+    list.map(function (P) {
+      return '<tr><td class="l">' + esc(P.model) + '</td><td class="l">' + esc(P.name) + '</td><td class="l mono">' + esc(P.p) + (P.reg ? "" : ' <span class="sl-tag bad">미등록</span>') + "</td>" +
+        slCell(P.prev) + slCell(P.inQ) + slCell(P.inC, "cx") + slCell(P.outQ) + slCell(P.outC, "cx") + slCell(P.end, "end" + (P.end < 0 ? " neg" : "")) + "</tr>";
+    }).join("") + '</tbody><tfoot><tr><td class="l" colspan="3">합계</td><td>' + slFmt(S.prev) + "</td><td>" + slFmt(S.inQ) + "</td><td>" + slFmt(S.inC) + "</td><td>" + slFmt(S.outQ) + "</td><td>" + slFmt(S.outC) + "</td><td>" + slFmt(S.end) + "</td></tr></tfoot></table></div>"
+    : '<p class="sum-hint">조건에 맞는 품번이 없습니다.' + (slActiveOnly ? " ‘재고 · 입출고 있는 품번만’을 끄면 등록된 품번이 모두 보입니다." : "") + "</p>";
+  h += "</section>";
+
+  // 로트별 잔량 (선입선출 확인용: 입고일이 이른 로트부터)
+  var lots = C.lots.filter(function (L) { return L.st !== "zero"; }).sort(function (a, b) { return a.p < b.p ? -1 : a.p > b.p ? 1 : (a.first || "9") < (b.first || "9") ? -1 : (a.first || "9") > (b.first || "9") ? 1 : a.lot < b.lot ? -1 : 1; });
+  var tag = { ok: '<span class="sl-tag ok">잔량</span>', noin: '<span class="sl-tag warn">입고이력 없음 (전월분?)</span>', over: '<span class="sl-tag bad">출고 초과</span>' };
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>로트별 잔량</h3><span class="sheet-status">입고 − 출고 · 다 나간 로트는 숨김 · 품번마다 입고일이 이른 로트부터</span></div></div>' +
+    (lots.length ? '<div class="sum-scroll" style="max-height:420px"><table class="sum-table"><thead><tr><th class="l">품번</th><th class="l">로트</th><th class="l">첫 입고일</th><th>입고</th><th>출고</th><th>잔량</th><th class="l">상태</th></tr></thead><tbody>' +
+      lots.map(function (L) { return '<tr><td class="l mono">' + esc(L.p) + '</td><td class="l mono">' + esc(L.lot || "–") + '</td><td class="l mono">' + esc(L.first || "–") + "</td>" + slCell(L.i) + slCell(L.o) + slCell(L.bal, "end" + (L.bal < 0 ? " neg" : "")) + '<td class="l">' + tag[L.st] + "</td></tr>"; }).join("") + "</tbody></table></div>"
+      : '<p class="sum-hint">남아 있는 로트가 없습니다.</p>') + "</section>";
+
+  // 입고 · 출고 내역
+  h += '<div class="sl-two"><section class="sheet-panel"><div class="sheet-top"><div><h3>입고 내역</h3><span class="sheet-status">' + sl.ins.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.ins, "in", C) + "</section>" +
+    '<section class="sheet-panel"><div class="sheet-top"><div><h3>출고 내역</h3><span class="sheet-status">' + sl.outs.length + "건 · 최근 일자부터</span></div></div>" + slEntryTable(sl.outs, "out", C) + "</section></div>";
+
+  var focused = document.activeElement && document.activeElement.id === "sl-search", caret = focused ? document.activeElement.selectionStart : 0;
+  body.innerHTML = h;
+  if (focused) { var s = document.getElementById("sl-search"); s.focus(); try { s.setSelectionRange(caret, caret); } catch (e) {} }
+  slStatus("영업창고 " + y + "년 " + m + "월 · " + sl.f + " · " + new Date(sl.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) + " 반영");
+}
+function slLoad(file) {
+  if (!window.XLSX) { slStatus("엑셀 구성 요소를 불러오지 못했습니다. 새로고침해 주세요."); return; }
+  if (!/\.(xlsx|xlsm|xls)$/i.test(file.name)) { slStatus("엑셀 파일만 넣을 수 있습니다: " + file.name); return; }
+  var fr = new FileReader();
+  fr.onerror = function () { slStatus("파일을 읽지 못했습니다: " + file.name); };
+  fr.onload = function () {
+    var res;
+    try { res = slParse(fr.result, file.name); } catch (e) { slStatus("파일을 읽지 못했습니다: " + file.name); return; }
+    if (res.err) { slStatus(res.err + " (" + file.name + ")"); return; }
+    sl = res; slModel = ""; slQ = "";
+    var saved = slSave();
+    slRender();
+    if (!saved) slStatus("화면에는 반영했지만 브라우저에 저장하지 못했습니다: " + file.name);
+  };
+  fr.readAsArrayBuffer(file);
+}
+(function () {
+  var input = document.getElementById("sl-file");
+  function pick() { input.value = ""; input.click(); }
+  document.getElementById("sl-bar-load").addEventListener("click", pick);
+  input.addEventListener("change", function () { if (input.files[0]) slLoad(input.files[0]); });
+  var wrap = document.getElementById("sl-wrap");
+  wrap.addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model]") : null;
+    if (!t) return;
+    if (t.hasAttribute("data-sl-load")) { pick(); return; }
+    slModel = t.getAttribute("data-sl-model"); slRender();
+  });
+  wrap.addEventListener("change", function (e) { if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); } });
+  var timer = null;
+  wrap.addEventListener("input", function (e) { if (e.target.id === "sl-search") { slQ = e.target.value; clearTimeout(timer); timer = setTimeout(slRender, 150); } });
+  ["dragenter", "dragover"].forEach(function (ev) { wrap.addEventListener(ev, function (e) { if (whView === "sales") e.preventDefault(); }); });
+  wrap.addEventListener("drop", function (e) { if (whView !== "sales") return; e.preventDefault(); var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) slLoad(f); });
+})();
+
 var ORDER = ["machining", "assembly", "shipping", "warehouse"];
 var tabs = document.querySelectorAll(".tab");
 var grid = document.getElementById("grid");
@@ -1503,7 +1798,7 @@ document.getElementById("stamp").textContent =
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
-// 공유 저장: 구글 로그인을 하면 계획표 · 기록 · 물류창고 데이터를 Firebase(Firestore)에 올려 팀이 같은 내용을 봅니다.
+// 공유 저장: 구글 로그인을 하면 계획표 · 기록 · 물류창고 · 영업창고 데이터를 Firebase(Firestore)에 올려 팀이 같은 내용을 봅니다.
 // 화면 쪽 코드는 그대로 localStorage에 쓰고, 여기서 그 쓰기를 가로채 서버로 보내고 서버의 변경을 다시 localStorage와 화면에 반영합니다.
 // 문서 하나 = 저장 키 하나 { v: JSON 문자열(지웠으면 null), t: 바꾼 시각(ms), by: 바꾼 사람 }. 늦게 쓴 쪽이 이깁니다.
 (function () {
@@ -1519,7 +1814,7 @@ document.getElementById("stamp").textContent =
     appId: "1:211055062030:web:40edbca4b80f27fbaea05f"
   });
   var auth = firebase.auth(), col = firebase.firestore().collection("pml");
-  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1"];
+  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1"];
   var META_KEY = "pl-sync-meta", MAX_BYTES = 950000;
   var rawSet = Storage.prototype.setItem, rawRemove = Storage.prototype.removeItem;
   var meta = {};   // 키별 { t: 내가 가진 판의 시각, d: 아직 서버에 못 올린 변경이 있으면 1 }
@@ -1573,6 +1868,8 @@ document.getElementById("stamp").textContent =
           if (!wh.lines) wh.lines = {};
           if (!wh.log) wh.log = [];
           whSel = null;
+        } else if (k === "pl-sales1") {
+          try { sl = JSON.parse(v || "null"); } catch (e) { sl = null; }
         } else if (k === "pl-hist1") {
           try { hist = JSON.parse(v || "{}") || {}; } catch (e) { hist = {}; }
         } else {
