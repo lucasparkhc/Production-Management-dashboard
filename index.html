@@ -438,7 +438,6 @@ tr.open .sl-caret { transform: rotate(90deg); }
         <button class="subtab" role="tab" type="button" data-wview="sales">영업창고 현황</button>
         <button class="subtab" role="tab" type="button" data-wview="map">배치도</button>
         <button class="subtab" role="tab" type="button" data-wview="stock">재고</button>
-        <button class="subtab" role="tab" type="button" data-wview="io">입출고 처리</button>
         <button class="subtab" role="tab" type="button" data-wview="master">기준정보</button>
       </div>
       <span class="sheet-status" id="wh-bar-status"></span>
@@ -1447,7 +1446,7 @@ function whApply(kind, rows, fileName) {
 function whStatus(msg) { document.getElementById("wh-status").textContent = msg; document.getElementById("wh-bar-status").textContent = msg; }
 // 물류창고의 작은 탭: 배치도(요약 숫자 + 도면) / 재고 / 입출고 처리(파일 넣기 + 내역). 위쪽 모양은 생산관리 화면과 같습니다.
 var whView = "sales";
-try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "io" || wv === "master") whView = wv; } catch (e) {}
+try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "master") whView = wv;   // 입출고 처리 탭은 없앴습니다(배치도는 영업창고 대장으로 채움) } catch (e) {}
 var whTabs = document.querySelectorAll("#wh-bar .subtab");
 function whApplyView() {
   document.getElementById("wh-kpis").hidden = whView !== "map";
@@ -1458,8 +1457,8 @@ function whApplyView() {
   document.getElementById("wh-bar-status").hidden = whView === "io";
   document.getElementById("sl-wrap").hidden = whView !== "sales";
   document.getElementById("sl-bar-load").hidden = whView !== "sales";
-  document.getElementById("wh-bar-in").hidden = whView === "sales" || whView === "master";
-  document.getElementById("wh-bar-out").hidden = whView === "sales" || whView === "master";
+  document.getElementById("wh-bar-in").hidden = true;    // 손으로 넣는 입고 · 출고 파일은 쓰지 않습니다
+  document.getElementById("wh-bar-out").hidden = true;
   document.getElementById("ms-wrap").hidden = whView !== "master";
   if (whView === "sales" && typeof slRender === "function") slRender();
   if (whView === "master" && typeof msRender === "function") msRender();
