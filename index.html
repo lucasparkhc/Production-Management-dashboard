@@ -239,6 +239,18 @@ body.view-plan main { padding-bottom: 14px; }
 .sl-tag.bad { color: #c62828; border-color: #e8a1a1; background: rgba(198, 40, 40, 0.07); }
 .sl-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .sl-two > * { min-width: 0; }
+.sl-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sl-item { appearance: none; font: inherit; text-align: left; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sl-item:hover { border-color: var(--accent); }
+.sl-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sl-item.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.sl-item .nm { font-size: 13px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.sl-item b { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.sl-item b.neg { color: #c62828; }
+.sl-item.zero b { color: var(--muted); opacity: 0.6; }
+.sl-item .meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sl-item .pn { margin-top: 4px; padding-top: 5px; border-top: 1px dashed var(--line); font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: var(--muted); }
+.sl-item .pn em { font-style: normal; font-weight: 600; color: var(--fg); }
 #sl-body { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 #sl-body .sum-table thead th { white-space: nowrap; }
 .sl-empty { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
@@ -1503,6 +1515,7 @@ document.getElementById("wh-search").addEventListener("input", function () { cle
 var SL_KEY = "pl-sales1";
 var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
 var slModel = "", slActiveOnly = true, slQ = "", slChartOpen = false;
+var slItemModel = "AC28", slName = null;   // 품목별 재고에서 고른 차종 · 품목(품명) { m, n }
 // 품번별 상자당 수량 { 품번(대문자): 개수 }. 대장 파일을 새로 넣어도 남습니다.
 var BOXQ_KEY = "pl-boxq1", boxq = {};
 try { boxq = JSON.parse(localStorage.getItem(BOXQ_KEY) || "{}") || {}; } catch (e) { boxq = {}; }
@@ -1698,16 +1711,45 @@ function slRender() {
       (C.negEnd ? "<li>월말재고가 마이너스인 품번 " + C.negEnd + "개</li>" : "") + "</ul>";
   }
 
-  // 품번별 재고
   var models = []; C.parts.forEach(function (P) { if (P.model && models.indexOf(P.model) < 0) models.push(P.model); });
   if (slModel && models.indexOf(slModel) < 0) slModel = "";
+
+  // 품목별 재고: 차종마다 품명(품목) 단위로 묶은 타일. AC28은 14개 품목. 타일을 누르면 아래 품번별 재고가 그 품목만 보여 줍니다.
+  if (models.indexOf(slItemModel) < 0) slItemModel = models[0] || "";
+  var items = [], byItem = {};
+  C.parts.forEach(function (P) {
+    if (P.model !== slItemModel || !P.reg) return;
+    var k = P.name;
+    if (!byItem[k]) { byItem[k] = { n: k, parts: [], end: 0, inN: 0, outN: 0, box: 0, noBox: 0 }; items.push(byItem[k]); }
+    var I = byItem[k];
+    I.parts.push(P); I.end += P.end; I.inN += P.inQ + P.inC; I.outN += P.outQ + P.outC;
+    if (P.end > 0) { if (boxq[whKey(P.p)]) I.box += slBoxes(P.p, P.end); else I.noBox++; }
+  });
+  var itemsEnd = items.reduce(function (a, I) { return a + I.end; }, 0), itemsStock = items.filter(function (I) { return I.end; }).length;
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목별 재고</h3><span class="sheet-status">' + esc(slItemModel) + " · " + items.length + "개 품목 · 재고 있는 품목 " + itemsStock + "개 · 월말재고 합계 " + slFmt(itemsEnd) + " · 눌러서 품번 보기</span></div>" +
+    '<div class="sheet-tools"><span class="sl-chips">' + models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-item-model="' + esc(x) + '" aria-pressed="' + (slItemModel === x) + '">' + esc(x) + "</button>"; }).join("") + "</span></div></div>" +
+    '<div class="sl-items">' + items.map(function (I) {
+      var on = slName && slName.m === slItemModel && slName.n === I.n;
+      var stocked = I.parts.filter(function (P) { return P.end; });
+      return '<button class="sl-item' + (I.end ? "" : " zero") + (on ? " on" : "") + '" type="button" data-sl-item="' + esc(I.n) + '" aria-pressed="' + !!on + '">' +
+        '<span class="nm">' + esc(I.n) + '</span><b class="' + (I.end < 0 ? "neg" : "") + '">' + slFmt(I.end) + "</b>" +
+        '<span class="meta">품번 ' + I.parts.length + "개" + (I.end > 0 ? " · 상자 " + (I.noBox ? (I.box ? I.box + "+?" : "?") : I.box) : "") + "</span>" +
+        '<span class="meta">입고 ' + slFmt(I.inN) + " · 출고 " + slFmt(I.outN) + "</span>" +
+        (stocked.length ? '<span class="pn">' + stocked.map(function (P) { return esc(P.p) + " <em>" + slFmt(P.end) + "</em>"; }).join("<br>") + "</span>" : "") +
+        "</button>";
+    }).join("") + "</div></section>";
+
+  // 품번별 재고
   var q = slQ.toUpperCase();
-  var list = C.parts.filter(function (P) { return (!slModel || P.model === slModel) && (!slActiveOnly || P.active || !P.reg) && (!q || (P.p + " " + P.name).toUpperCase().indexOf(q) >= 0); });
+  var list = C.parts.filter(function (P) {
+    if (slName) return P.model === slName.m && P.name === slName.n && (!q || (P.p + " " + P.name).toUpperCase().indexOf(q) >= 0);
+    return (!slModel || P.model === slModel) && (!slActiveOnly || P.active || !P.reg) && (!q || (P.p + " " + P.name).toUpperCase().indexOf(q) >= 0);
+  });
   var S = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
   list.forEach(function (P) { for (var f in S) S[f] += P[f]; });
-  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 상자당 수량을 적으면 배치도에 반영</span></div>" +
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3 id="sl-parts-h">품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 상자당 수량을 적으면 배치도에 반영</span></div>" +
     '<div class="sheet-tools"><span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>" +
-    '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>" +
+    (slName ? '<button class="sl-chip" type="button" data-sl-item-clear aria-pressed="true">품목: ' + esc(slName.m + " · " + slName.n) + " ✕</button>" : '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>") +
     '<input class="sheet-search" id="sl-search" type="search" placeholder="품번 · 품명 찾기" aria-label="품번 · 품명 찾기" value="' + esc(slQ) + '"></div></div>';
   h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th><th>상자당 수량</th><th>상자 수</th></tr></thead><tbody>' +
     list.map(function (P) {
@@ -1749,7 +1791,7 @@ function slLoad(file) {
     var res;
     try { res = slParse(fr.result, file.name); } catch (e) { slStatus("파일을 읽지 못했습니다: " + file.name); return; }
     if (res.err) { slStatus(res.err + " (" + file.name + ")"); return; }
-    sl = res; slModel = ""; slQ = "";
+    sl = res; slModel = ""; slQ = ""; slName = null;
     var saved = slSave();
     slSyncMap();
     slRender();
@@ -1764,10 +1806,19 @@ function slLoad(file) {
   input.addEventListener("change", function () { if (input.files[0]) slLoad(input.files[0]); });
   var wrap = document.getElementById("sl-wrap");
   wrap.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model]") : null;
+    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear]") : null;
     if (!t) return;
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
-    slModel = t.getAttribute("data-sl-model"); slRender();
+    if (t.hasAttribute("data-sl-item-model")) { slItemModel = t.getAttribute("data-sl-item-model"); slRender(); return; }
+    if (t.hasAttribute("data-sl-item-clear")) { slName = null; slRender(); return; }
+    if (t.hasAttribute("data-sl-item")) {
+      var n = t.getAttribute("data-sl-item");
+      slName = slName && slName.m === slItemModel && slName.n === n ? null : { m: slItemModel, n: n };
+      slRender();
+      if (slName) { var hh = document.getElementById("sl-parts-h"); if (hh && hh.scrollIntoView) hh.scrollIntoView({ block: "start", behavior: "smooth" }); }
+      return;
+    }
+    slModel = t.getAttribute("data-sl-model"); slName = null; slRender();
   });
   wrap.addEventListener("toggle", function (e) { if (e.target.id === "sl-chart-fold") slChartOpen = e.target.open; }, true);
   wrap.addEventListener("change", function (e) {
