@@ -256,6 +256,7 @@ body.view-plan main { padding-bottom: 14px; }
   nav.rail, .group + .group { gap: 16px; padding-left: 16px; }
   nav.rail { padding-left: 0; }
 }
+.upd-note { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); }
 </style>
 </head>
 <body>
@@ -1993,5 +1994,35 @@ document.getElementById("stamp").textContent =
   });
 })();
 </script>
+<script>
+// 자동 업데이트: 열어 둔 화면도 GitHub에 새 버전이 올라오면 저절로 새로고침합니다.
+// 1분마다(그리고 탭으로 돌아올 때) 이 페이지 파일을 다시 받아 처음 받은 것과 비교합니다. 데이터는 브라우저 · 공유 서버에 저장돼 있어 새로고침해도 그대로입니다.
+// 입력 칸을 쓰는 중이면 끝날 때까지 기다렸다가 새로고침합니다.
+(function () {
+  if (!/^https?:/.test(location.protocol) || !window.fetch) return;
+  var base = null, pending = false, EVERY = 60000;
+  function hash(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
+  function busy() { var a = document.activeElement; return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT") && a.type !== "checkbox" && a.type !== "file"; }
+  function tryReload() {
+    if (busy()) { setTimeout(tryReload, 3000); return; }
+    var n = document.getElementById("upd-note");
+    if (n) n.hidden = false;
+    setTimeout(function () { location.reload(); }, 1200);
+  }
+  function check() {
+    if (pending || document.hidden) return;
+    fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) {
+      if (!t) return;
+      var h = hash(t);
+      if (base === null) { base = h; return; }
+      if (h !== base) { pending = true; tryReload(); }
+    }).catch(function () {});
+  }
+  check();
+  setInterval(check, EVERY);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+})();
+</script>
+<div id="upd-note" class="upd-note" role="status" hidden>새 버전이 올라와 화면을 새로고침합니다…</div>
 </body>
 </html>
