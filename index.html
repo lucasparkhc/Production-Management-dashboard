@@ -220,6 +220,8 @@ body.view-plan main { padding-bottom: 14px; }
 .sl-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .sl-issues { margin: 0; padding: 10px 14px 10px 30px; border: 1px solid #e7c27a; background: rgba(178, 106, 0, 0.08); border-radius: 5px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
 .sum-table td.neg { color: #c62828; font-weight: 700; }
+.sl-boxq { font: inherit; font-size: 13px; width: 76px; text-align: right; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font-variant-numeric: tabular-nums; }
+.sl-boxq:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sum-table td.cx { color: #c62828; }
 .sum-table td.end { font-weight: 700; border-left: 1px solid var(--line); }
 .sum-table td.mono, .sum-table th.mono { font-family: var(--font-mono); font-size: 12px; }
@@ -410,6 +412,7 @@ body.view-plan main { padding-bottom: 14px; }
           <input class="sheet-search" id="wh-search" type="search" placeholder="품번 찾기" aria-label="품번 찾기">
         </div>
       </div>
+      <p class="sum-hint" id="wh-src" hidden></p>
       <div class="wh-map" id="wh-map"></div>
       <div class="wh-info" id="wh-info"></div>
       <div class="wh-legend" id="wh-legend"></div>
@@ -445,7 +448,7 @@ body.view-plan main { padding-bottom: 14px; }
           <input type="file" id="wh-file-out" accept=".xlsx,.xlsm,.xls,.csv" hidden>
         </div>
       </div>
-      <p class="sum-hint">엑셀 첫 시트에서 머리글 <b>품번</b>(P/No)과 <b>수량</b>(상자 수)을 찾아 읽습니다. <b>일자</b>, <b>품명</b> 열은 있으면 함께 읽습니다. 내용은 이 브라우저에만 저장됩니다.</p>
+      <p class="sum-hint">영업창고 월간 대장은 여기 말고 <b>영업창고 현황</b> 탭에 넣어 주세요. 그쪽에서 배치도를 자동으로 채웁니다. 여기서는 엑셀 첫 시트에서 머리글 <b>품번</b>(P/No)과 <b>수량</b>(상자 수)을 찾아 읽습니다. <b>일자</b>, <b>품명</b> 열은 있으면 함께 읽습니다. 내용은 이 브라우저에만 저장됩니다.</p>
     </section>
 
     <section class="sheet-panel" id="wh-sec-stock" aria-label="품번별 재고">
@@ -1251,7 +1254,7 @@ function whSvg() {
       var id = r[0] + "-" + n, box = wh.slots[id];
       var cls = "cell" + (box ? " full" : "") + (q && !(box && box.p.toUpperCase().indexOf(q) >= 0) ? " dim" : "") + (id === whSel ? " sel" : "");
       h += '<rect class="' + cls + '" data-loc="' + id + '" x="' + cx + '" y="' + cy + '" width="' + WH_CW + '" height="' + WH_CH + '"' +
-        (box ? ' style="fill:' + whColor(box.p) + '"' : "") + "><title>" + esc(whLocName(id) + (box ? " · " + box.p + (box.n ? " " + box.n : "") + " · 입고 " + box.d : " · 비어 있음")) + "</title></rect>";
+        (box ? ' style="fill:' + whColor(box.p) + '"' : "") + "><title>" + esc(whLocName(id) + (box ? " · " + box.p + (box.n ? " " + box.n : "") + (box.lot ? " · 로트 " + box.lot + (box.c ? " (" + box.c + "개)" : "") : "") + " · 입고 " + box.d : " · 비어 있음")) + "</title></rect>";
     }
     h += '<rect class="rack" x="' + x0 + '" y="' + WH_Y + '" width="' + WH_CW * WH_PER + '" height="' + WH_CH * WH_ROWS + '"/>';
   });
@@ -1287,6 +1290,12 @@ function whRender() {
     '<div class="wh-kpi"><span>오늘 입고 · 출고</span><b>' + tin + " <small>·</small> " + tout + ' <small>상자</small></b></div>' +
     '<div class="wh-kpi"><span>가장 오래된 입고일</span><b>' + (oldest ? oldest.slice(5) : "–") + " <small>" + order.length + '개 품번</small></b></div>';
   document.getElementById("wh-map").innerHTML = whSvg();
+  var src = document.getElementById("wh-src"), L = wh.fromLedger;
+  src.hidden = !L;
+  if (L) src.innerHTML = "<b>영업창고 대장 기준 배치</b> · " + esc(L.f) + " · " + new Date(L.at).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) +
+    (L.missing.length ? ' · <span class="wh-part">상자당 수량 미입력 ' + L.missing.length + "개 품번 빠짐 (" + esc(L.missing.join(", ")) + ")</span>" : "") +
+    (L.over ? ' · <span class="wh-part">라인 자리가 없어 ' + L.over + "상자는 적재 창고에 있음</span>" : "") +
+    " · 영업창고 현황 탭에서 대장을 다시 넣거나 상자당 수량을 바꾸면 배치도가 다시 그려집니다.";
   var leg = '<span><i style="background:var(--surface)"></i>빈 자리</span>';
   order.forEach(function (g) { leg += '<span><i style="background:' + whColor(g.p) + '"></i>' + esc(g.p) + " (" + g.c + ")</span>"; });
   document.getElementById("wh-legend").innerHTML = leg;
@@ -1297,7 +1306,7 @@ function whRender() {
   });
   if (!document.getElementById("wh-lines").contains(document.activeElement)) document.getElementById("wh-lines").innerHTML = lh;
   var info = document.getElementById("wh-info");
-  if (whSel) { var sb = wh.slots[whSel]; info.textContent = whLocName(whSel) + (sb ? " · " + sb.p + (sb.n ? " " + sb.n : "") + " · 입고일 " + sb.d : " · 비어 있음"); }
+  if (whSel) { var sb = wh.slots[whSel]; info.textContent = whLocName(whSel) + (sb ? " · " + sb.p + (sb.n ? " " + sb.n : "") + (sb.lot ? " · 로트 " + sb.lot + (sb.c ? " (" + sb.c + "개)" : "") : "") + " · 입고일 " + sb.d : " · 비어 있음"); }
   else info.textContent = "";
 
   order.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.p < b.p ? -1 : 1; });
@@ -1344,6 +1353,7 @@ function whParse(buf) {
   return out;
 }
 function whApply(kind, rows, fileName) {
+  wh.fromLedger = null;   // 손으로 넣은 파일이 섞이면 대장 기준 배치라는 표시를 뗍니다
   wh.undo = { slots: JSON.parse(JSON.stringify(wh.slots)), seq: wh.seq, logLen: wh.log.length, f: fileName };
   var at = Date.now(), entries = [], req = 0, done = 0;
   rows = rows.map(function (x, i) { return [x, i]; }).sort(function (a, b) { return a[0].d < b[0].d ? -1 : a[0].d > b[0].d ? 1 : a[1] - b[1]; }).map(function (x) { return x[0]; });
@@ -1396,7 +1406,8 @@ function whApplyView() {
   document.getElementById("wh-bar-in").hidden = whView === "sales";
   document.getElementById("wh-bar-out").hidden = whView === "sales";
   if (whView === "sales" && typeof slRender === "function") slRender();
-  else if (whView !== "sales" && document.getElementById("wh-status").textContent) whStatus(document.getElementById("wh-status").textContent);
+  if (whView !== "sales") whRender();
+  if (whView !== "sales" && document.getElementById("wh-status").textContent) whStatus(document.getElementById("wh-status").textContent);
   whTabs.forEach(function (b) { b.setAttribute("aria-selected", b.dataset.wview === whView ? "true" : "false"); });
 }
 whTabs.forEach(function (b) {
@@ -1450,7 +1461,7 @@ document.getElementById("wh-undo").addEventListener("click", function () {
 });
 document.getElementById("wh-reset").addEventListener("click", function () {
   if (!confirm("창고 배치와 처리 내역을 모두 지웁니다. 계속할까요?")) return;
-  wh = { slots: {}, lines: wh.lines || {}, log: [], seq: 1, undo: null };   // 라인별 품목 등록은 남겨 둡니다
+  wh = { slots: {}, lines: wh.lines || {}, log: [], seq: 1, undo: null, fromLedger: null };   // 라인별 품목 등록은 남겨 둡니다
   whSel = null; whSave(); whRender();
   whStatus("창고를 비웠습니다.");
 });
@@ -1483,6 +1494,36 @@ document.getElementById("wh-search").addEventListener("input", function () { cle
 var SL_KEY = "pl-sales1";
 var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
 var slModel = "", slActiveOnly = true, slQ = "";
+// 품번별 상자당 수량 { 품번(대문자): 개수 }. 대장 파일을 새로 넣어도 남습니다.
+var BOXQ_KEY = "pl-boxq1", boxq = {};
+try { boxq = JSON.parse(localStorage.getItem(BOXQ_KEY) || "{}") || {}; } catch (e) { boxq = {}; }
+function boxqSave() { try { localStorage.setItem(BOXQ_KEY, JSON.stringify(boxq)); return true; } catch (e) { return false; } }
+function slBoxes(p, qty) { var n = boxq[whKey(p)]; return n > 0 && qty > 0 ? Math.ceil(qty / n) : 0; }
+// 대장의 로트 잔량 → 배치도. 품번마다 입고일이 이른 로트부터 라인 1번에 놓습니다(선입선출: 1번부터 출고).
+// 로트 잔량을 상자당 수량으로 나눠 올림한 만큼 상자를 만들고, 마지막 상자에는 남은 개수만 담습니다.
+function slSyncMap() {
+  if (!sl) return;
+  var C = slCompute(), names = {}, missing = [], over = 0, seq = 1;
+  C.parts.forEach(function (P) { names[whKey(P.p)] = P.name; });
+  var lots = C.lots.filter(function (L) { return L.bal > 0; }).sort(function (a, b) { return (a.first || "9") < (b.first || "9") ? -1 : (a.first || "9") > (b.first || "9") ? 1 : a.lot < b.lot ? -1 : 1; });
+  wh.slots = {}; wh.undo = null; whSel = null;
+  lots.forEach(function (L) {
+    var per = boxq[whKey(L.p)];
+    if (!(per > 0)) { if (missing.indexOf(L.p) < 0) missing.push(L.p); return; }
+    var left = L.bal;
+    while (left > 0) {
+      var c = Math.min(per, left); left -= c;
+      var lines = whLinesFor(L.p, true).filter(function (l) { return whLineBoxes(l).length < WH_N; });
+      if (!lines.length) { over++; continue; }
+      var cur = whLineBoxes(lines[0]);
+      cur.push({ p: L.p, n: names[whKey(L.p)] || "", d: L.first || sl.month + "-01", q: seq++, lot: L.lot, c: c });
+      whSetLine(lines[0], cur);
+    }
+  });
+  wh.seq = seq;
+  wh.fromLedger = { f: sl.f, at: sl.at, missing: missing, over: over };
+  whSave();
+}
 try { sl = JSON.parse(localStorage.getItem(SL_KEY) || "null"); } catch (e) { sl = null; }
 function slSave() { try { localStorage.setItem(SL_KEY, JSON.stringify(sl)); return true; } catch (e) { return false; } }
 function slN(v) { var n = Number(v); return isFinite(n) ? n : 0; }
@@ -1658,15 +1699,17 @@ function slRender() {
   var list = C.parts.filter(function (P) { return (!slModel || P.model === slModel) && (!slActiveOnly || P.active || !P.reg) && (!q || (P.p + " " + P.name).toUpperCase().indexOf(q) >= 0); });
   var S = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
   list.forEach(function (P) { for (var f in S) S[f] += P[f]; });
-  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소)</span></div>" +
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 상자당 수량을 적으면 배치도에 반영</span></div>" +
     '<div class="sheet-tools"><span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>" +
     '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>" +
     '<input class="sheet-search" id="sl-search" type="search" placeholder="품번 · 품명 찾기" aria-label="품번 · 품명 찾기" value="' + esc(slQ) + '"></div></div>';
-  h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th></tr></thead><tbody>' +
+  h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th><th>상자당 수량</th><th>상자 수</th></tr></thead><tbody>' +
     list.map(function (P) {
       return '<tr><td class="l">' + esc(P.model) + '</td><td class="l">' + esc(P.name) + '</td><td class="l mono">' + esc(P.p) + (P.reg ? "" : ' <span class="sl-tag bad">미등록</span>') + "</td>" +
-        slCell(P.prev) + slCell(P.inQ) + slCell(P.inC, "cx") + slCell(P.outQ) + slCell(P.outC, "cx") + slCell(P.end, "end" + (P.end < 0 ? " neg" : "")) + "</tr>";
-    }).join("") + '</tbody><tfoot><tr><td class="l" colspan="3">합계</td><td>' + slFmt(S.prev) + "</td><td>" + slFmt(S.inQ) + "</td><td>" + slFmt(S.inC) + "</td><td>" + slFmt(S.outQ) + "</td><td>" + slFmt(S.outC) + "</td><td>" + slFmt(S.end) + "</td></tr></tfoot></table></div>"
+        slCell(P.prev) + slCell(P.inQ) + slCell(P.inC, "cx") + slCell(P.outQ) + slCell(P.outC, "cx") + slCell(P.end, "end" + (P.end < 0 ? " neg" : "")) +
+        '<td><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" data-boxq="' + esc(P.p) + '" value="' + (boxq[whKey(P.p)] || "") + '" placeholder="–" aria-label="' + esc(P.p) + ' 상자당 수량"></td>' +
+        '<td class="' + (P.end > 0 && !boxq[whKey(P.p)] ? "z" : "") + '">' + (P.end > 0 ? (boxq[whKey(P.p)] ? slFmt(slBoxes(P.p, P.end)) : "?") : "0") + "</td></tr>";
+    }).join("") + '</tbody><tfoot><tr><td class="l" colspan="3">합계</td><td>' + slFmt(S.prev) + "</td><td>" + slFmt(S.inQ) + "</td><td>" + slFmt(S.inC) + "</td><td>" + slFmt(S.outQ) + "</td><td>" + slFmt(S.outC) + "</td><td>" + slFmt(S.end) + "</td><td></td><td>" + slFmt(list.reduce(function (a, P) { return a + slBoxes(P.p, P.end); }, 0)) + "</td></tr></tfoot></table></div>"
     : '<p class="sum-hint">조건에 맞는 품번이 없습니다.' + (slActiveOnly ? " ‘재고 · 입출고 있는 품번만’을 끄면 등록된 품번이 모두 보입니다." : "") + "</p>";
   h += "</section>";
 
@@ -1698,6 +1741,7 @@ function slLoad(file) {
     if (res.err) { slStatus(res.err + " (" + file.name + ")"); return; }
     sl = res; slModel = ""; slQ = "";
     var saved = slSave();
+    slSyncMap();
     slRender();
     if (!saved) slStatus("화면에는 반영했지만 브라우저에 저장하지 못했습니다: " + file.name);
   };
@@ -1715,7 +1759,15 @@ function slLoad(file) {
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
     slModel = t.getAttribute("data-sl-model"); slRender();
   });
-  wrap.addEventListener("change", function (e) { if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); } });
+  wrap.addEventListener("change", function (e) {
+    if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); return; }
+    var p = e.target.getAttribute && e.target.getAttribute("data-boxq");
+    if (p == null) return;
+    var n = Math.floor(Number(e.target.value));
+    if (n > 0) boxq[whKey(p)] = n; else delete boxq[whKey(p)];
+    boxqSave(); slSyncMap(); slRender();
+    slStatus(p + (n > 0 ? " 상자당 " + n + "개로 저장 · 배치도에 반영했습니다" : " 상자당 수량을 지웠습니다 · 배치도에서 빠집니다"));
+  });
   var timer = null;
   wrap.addEventListener("input", function (e) { if (e.target.id === "sl-search") { slQ = e.target.value; clearTimeout(timer); timer = setTimeout(slRender, 150); } });
   ["dragenter", "dragover"].forEach(function (ev) { wrap.addEventListener(ev, function (e) { if (whView === "sales") e.preventDefault(); }); });
@@ -1815,7 +1867,7 @@ document.getElementById("stamp").textContent =
     appId: "1:211055062030:web:40edbca4b80f27fbaea05f"
   });
   var auth = firebase.auth(), col = firebase.firestore().collection("pml");
-  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1"];
+  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1", "pl-boxq1"];
   var META_KEY = "pl-sync-meta", MAX_BYTES = 950000;
   var rawSet = Storage.prototype.setItem, rawRemove = Storage.prototype.removeItem;
   var meta = {};   // 키별 { t: 내가 가진 판의 시각, d: 아직 서버에 못 올린 변경이 있으면 1 }
@@ -1869,6 +1921,8 @@ document.getElementById("stamp").textContent =
           if (!wh.lines) wh.lines = {};
           if (!wh.log) wh.log = [];
           whSel = null;
+        } else if (k === "pl-boxq1") {
+          try { boxq = JSON.parse(v || "{}") || {}; } catch (e) { boxq = {}; }
         } else if (k === "pl-sales1") {
           try { sl = JSON.parse(v || "null"); } catch (e) { sl = null; }
         } else if (k === "pl-hist1") {
