@@ -251,6 +251,21 @@ tr.open .sl-caret { transform: rotate(90deg); }
 .sl-tag.bad { color: #c62828; border-color: #e8a1a1; background: rgba(198, 40, 40, 0.07); }
 .sl-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .sl-two > * { min-width: 0; }
+#ms-wrap { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+#ms-wrap .sum-scroll { max-height: none; }
+#ms-wrap .sum-table thead th { white-space: nowrap; }
+.ms-table td { vertical-align: top; }
+.ms-table td.ms-item { font-weight: 600; padding-top: 10px; }
+.ms-table td.ms-parts { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.ms-part { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px 3px 8px; background: var(--slot); }
+.ms-part b { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.ms-name { font: inherit; font-size: 12px; width: 110px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
+.ms-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ms-del { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 4px; }
+.ms-del:hover { color: #c62828; }
+.ms-add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.ms-add label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.ms-add input { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; width: 160px; max-width: 100%; }
 .sl-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .sl-year { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .sl-past { margin: 0; padding: 10px 14px; border-radius: 5px; border: 1px solid var(--s1); background: color-mix(in srgb, var(--s1) 10%, transparent); font-size: 13px; }
@@ -424,6 +439,7 @@ tr.open .sl-caret { transform: rotate(90deg); }
         <button class="subtab" role="tab" type="button" data-wview="map">배치도</button>
         <button class="subtab" role="tab" type="button" data-wview="stock">재고</button>
         <button class="subtab" role="tab" type="button" data-wview="io">입출고 처리</button>
+        <button class="subtab" role="tab" type="button" data-wview="master">기준정보</button>
       </div>
       <span class="sheet-status" id="wh-bar-status"></span>
       <button class="btn primary" id="sl-bar-load" type="button">월간 입출고 엑셀 넣기</button>
@@ -497,6 +513,8 @@ tr.open .sl-caret { transform: rotate(90deg); }
       <div class="sheet-top"><h3>입출고 처리 내역</h3></div>
       <div id="wh-log"></div>
     </section>
+
+    <div id="ms-wrap" hidden></div>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -1429,7 +1447,7 @@ function whApply(kind, rows, fileName) {
 function whStatus(msg) { document.getElementById("wh-status").textContent = msg; document.getElementById("wh-bar-status").textContent = msg; }
 // 물류창고의 작은 탭: 배치도(요약 숫자 + 도면) / 재고 / 입출고 처리(파일 넣기 + 내역). 위쪽 모양은 생산관리 화면과 같습니다.
 var whView = "sales";
-try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "io") whView = wv; } catch (e) {}
+try { var wv = localStorage.getItem("pl-whview"); if (wv === "sales" || wv === "map" || wv === "stock" || wv === "io" || wv === "master") whView = wv; } catch (e) {}
 var whTabs = document.querySelectorAll("#wh-bar .subtab");
 function whApplyView() {
   document.getElementById("wh-kpis").hidden = whView !== "map";
@@ -1440,11 +1458,13 @@ function whApplyView() {
   document.getElementById("wh-bar-status").hidden = whView === "io";
   document.getElementById("sl-wrap").hidden = whView !== "sales";
   document.getElementById("sl-bar-load").hidden = whView !== "sales";
-  document.getElementById("wh-bar-in").hidden = whView === "sales";
-  document.getElementById("wh-bar-out").hidden = whView === "sales";
+  document.getElementById("wh-bar-in").hidden = whView === "sales" || whView === "master";
+  document.getElementById("wh-bar-out").hidden = whView === "sales" || whView === "master";
+  document.getElementById("ms-wrap").hidden = whView !== "master";
   if (whView === "sales" && typeof slRender === "function") slRender();
+  if (whView === "master" && typeof msRender === "function") msRender();
   if (whView !== "sales") whRender();
-  if (whView !== "sales" && document.getElementById("wh-status").textContent) whStatus(document.getElementById("wh-status").textContent);
+  if (whView !== "sales" && whView !== "master" && document.getElementById("wh-status").textContent) whStatus(document.getElementById("wh-status").textContent);
   whTabs.forEach(function (b) { b.setAttribute("aria-selected", b.dataset.wview === whView ? "true" : "false"); });
 }
 whTabs.forEach(function (b) {
@@ -1534,11 +1554,47 @@ var SL_PREFIX = "pl-sales-", SL_RE = /^pl-sales-\d{4}-\d{2}$/;
 var sl = null;            // { f, at, month: "YYYY-MM", master: [[차종, 품명, 품번, 전월재고]], ins: [[일자, 품번, 로트, 수량, 입고처, 비고]], outs: [...] }
 var slModel = "", slActiveOnly = true, slQ = "", slChartOpen = false;
 var slItemModel = "AC28", slName = null, slOpenParts = {};   // slOpenParts: LOT를 펼친 품번   // 품목별 재고에서 고른 차종 · 품목(품명) { m, n }
-// 품번별 상자당 수량 { 품번(대문자): 개수 }. 대장 파일을 새로 넣어도 남습니다.
+// ── 기준정보 ──
+// 품번마다 차종 · 품목, 품목마다 상자당 적재 수량(같은 품목이면 품번이 달라도 같음). 팀과 공유합니다.
+// 품목별 재고 카드 · 품번별 재고 · 상자 수 · 배치도가 모두 이 표를 봅니다. 엑셀은 그 달 입고 · 출고 · 전월재고만 가져옵니다.
+var MS_KEY = "pl-master1";
+var ms = { parts: [], box: {} };   // parts: [{ m: 차종, n: 품목, p: 품번 }], box: { "차종|품목": 상자당 적재 수량 }
+try { var msv = JSON.parse(localStorage.getItem(MS_KEY) || "null"); if (msv && msv.parts) ms = msv; } catch (e) {}
+if (!ms.box) ms.box = {};
+var msIdx = {};
+function msIndex() { msIdx = {}; ms.parts.forEach(function (x, i) { msIdx[whKey(x.p)] = x; x.i = i; }); }
+msIndex();
+function msSave() { var c = { parts: ms.parts.map(function (x) { return { m: x.m, n: x.n, p: x.p }; }), box: ms.box }; try { localStorage.setItem(MS_KEY, JSON.stringify(c)); return true; } catch (e) { return false; } }
+function msKey(m, n) { return m + "|" + n; }
+function msPart(p) { return msIdx[whKey(p)] || null; }
+function msPer(p) { var x = msPart(p); return x ? (ms.box[msKey(x.m, x.n)] || 0) : 0; }
+function msItems(model) {
+  var out = [], seen = {};
+  ms.parts.forEach(function (x) { if (model && x.m !== model) return; var k = msKey(x.m, x.n); if (!seen[k]) { seen[k] = { m: x.m, n: x.n, parts: [] }; out.push(seen[k]); } seen[k].parts.push(x); });
+  return out;
+}
+function msModels() { var out = []; ms.parts.forEach(function (x) { if (out.indexOf(x.m) < 0) out.push(x.m); }); return out; }
+// 엑셀 집계 시트의 품번 목록에서 기준정보에 없는 품번을 더합니다(차종 · 품목은 엑셀에 적힌 대로). only가 있으면 그 품번만.
+function msSeed(D, only) {
+  var add = 0;
+  (D && D.master || []).forEach(function (x) {
+    if (!x[0] || !x[1] || msPart(x[2]) || (only && only.indexOf(whKey(x[2])) < 0)) return;
+    ms.parts.push({ m: x[0], n: x[1], p: x[2] }); msIdx[whKey(x[2])] = ms.parts[ms.parts.length - 1]; add++;
+  });
+  if (add) msIndex();
+  return add;
+}
+
+// 예전: 품번별 상자당 수량 { 품번(대문자): 개수 }. 기준정보(품목 단위)로 옮긴 뒤에는 쓰지 않습니다.
 var BOXQ_KEY = "pl-boxq1", boxq = {};
 try { boxq = JSON.parse(localStorage.getItem(BOXQ_KEY) || "{}") || {}; } catch (e) { boxq = {}; }
 function boxqSave() { try { localStorage.setItem(BOXQ_KEY, JSON.stringify(boxq)); return true; } catch (e) { return false; } }
-function slBoxes(p, qty) { var n = boxq[whKey(p)]; return n > 0 && qty > 0 ? Math.ceil(qty / n) : 0; }
+function slBoxes(p, qty) { var n = msPer(p); return n > 0 && qty > 0 ? Math.ceil(qty / n) : 0; }
+function msMigrateBox() {   // 예전 품번별 상자 수량 → 그 품번의 품목 수량(품목에 아직 값이 없을 때)
+  var moved = 0;
+  Object.keys(boxq).forEach(function (k) { var x = msPart(k); if (x && !ms.box[msKey(x.m, x.n)] && boxq[k] > 0) { ms.box[msKey(x.m, x.n)] = boxq[k]; moved++; } });
+  return moved;
+}
 // 대장의 로트 잔량 → 배치도. 품번마다 입고일이 이른 로트부터 라인 1번에 놓습니다(선입선출: 1번부터 출고).
 // 로트 잔량을 상자당 수량으로 나눠 올림한 만큼 상자를 만들고, 마지막 상자에는 남은 개수만 담습니다.
 function slSyncMap() {
@@ -1549,7 +1605,7 @@ function slSyncMap() {
   var lots = C.lots.filter(function (L) { return L.bal > 0; }).sort(function (a, b) { return (a.first || "9") < (b.first || "9") ? -1 : (a.first || "9") > (b.first || "9") ? 1 : a.lot < b.lot ? -1 : 1; });
   wh.slots = {}; wh.undo = null; whSel = null;
   lots.forEach(function (L) {
-    var per = boxq[whKey(L.p)];
+    var per = msPer(L.p);
     if (!(per > 0)) { if (missing.indexOf(L.p) < 0) missing.push(L.p); return; }
     var left = L.bal;
     while (left > 0) {
@@ -1587,6 +1643,7 @@ function slPick() {   // 보고 있는 달을 다시 읽습니다. 고른 달이
 }
 function slSetCur(mon) { slCur = mon; try { localStorage.setItem("pl-sales-sel", mon); } catch (e) {} slModel = ""; slQ = ""; slName = null; slOpenParts = {}; slPick(); }
 slMigrate();
+if (!ms.parts.length && slLatest()) { msSeed(slLatest()); msMigrateBox(); msSave(); }   // 처음 한 번: 가장 최근 엑셀의 집계 시트로 기준정보를 채웁니다
 if (!slGet(slCur)) slCur = "";   // 처음 열 때는 데이터가 있는 가장 최근 달로
 slPick();
 function slN(v) { var n = Number(v); return isFinite(n) ? n : 0; }
@@ -1651,6 +1708,11 @@ function slCompute(D) {
   var mon = D.month, y = +mon.slice(0, 4), m = +mon.slice(5, 7), days = new Date(y, m, 0).getDate();
   var parts = {}, order = [], unreg = {}, outside = 0;
   D.master.forEach(function (x) { var k = whKey(x[2]); if (parts[k]) return; parts[k] = { model: x[0], name: x[1], p: x[2], prev: x[3], inQ: 0, inC: 0, outQ: 0, outC: 0, reg: true }; order.push(parts[k]); });
+  if (ms.parts.length) {   // 기준정보가 있으면 차종 · 품목 · 등록 여부는 기준정보를 따릅니다. 기준정보의 모든 품번이 나오도록 없는 품번은 0으로 더합니다.
+    order.forEach(function (P) { var x = msPart(P.p); if (x) { P.model = x.m; P.name = x.n; P.reg = true; } else P.reg = false; });
+    ms.parts.forEach(function (x) { var k = whKey(x.p); if (!parts[k]) { parts[k] = { model: x.m, name: x.n, p: x.p, prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, reg: true }; order.push(parts[k]); } });
+    order.sort(function (a, b) { var x = msPart(a.p), y = msPart(b.p); return (x ? x.i : 1e9) - (y ? y.i : 1e9); });
+  }
   var daily = []; for (var d = 1; d <= days; d++) daily.push({ d: mon + "-" + (d < 10 ? "0" : "") + d, i: 0, o: 0 });
   function add(e, kind) {
     var k = whKey(e[1]), q = e[3];
@@ -1783,7 +1845,7 @@ function slRender() {
   if (sl.month !== latestMon) h += '<p class="sl-past" role="status"><b>지난 데이터: ' + y + "년 " + m + "월</b> · 배치도와 상자 수는 가장 최근 달(" + latestMon.slice(0, 4) + "년 " + (+latestMon.slice(5, 7)) + '월) 기준입니다. <button class="sl-linkbtn" type="button" data-sl-month="' + latestMon + '">최근 달로</button></p>';
   if (issues) {
     h += '<ul class="sl-issues">' +
-      (C.unreg.length ? "<li>집계 시트에 없는 신규 품번 " + C.unreg.length + "개: " + esc(C.unreg.join(", ")) + " → 집계 시트에 차종 · 품명 · 품번 등록</li>" : "") +
+      (C.unreg.length ? "<li>기준정보에 없는 품번 " + C.unreg.length + "개: " + esc(C.unreg.join(", ")) + (ms.parts.length ? ' <button class="sl-linkbtn" type="button" data-ms-addfile>엑셀에 적힌 차종 · 품목으로 기준정보에 추가</button> 또는 기준정보 탭에서 직접 추가' : " → 집계 시트에 차종 · 품명 · 품번 등록") + "</li>" : "") +
       (C.outside ? "<li>기준월(" + sl.month + ") 밖 일자 " + C.outside + "건은 집계에서 빠졌습니다.</li>" : "") +
       (C.cancelBad ? "<li>같은 품번 · 로트의 원래 입력이 없는 취소 " + C.cancelBad + "건</li>" : "") +
       (C.lotIssues ? "<li>입고보다 출고가 많은 LOT " + C.lotIssues + "개 (품번별 재고에서 ‘LOT 확인’ 표시된 품번을 눌러 확인)</li>" : "") +
@@ -1803,7 +1865,7 @@ function slRender() {
     if (!byItem[k]) { byItem[k] = { n: k, parts: [], end: 0, inN: 0, outN: 0, box: 0, noBox: 0 }; items.push(byItem[k]); }
     var I = byItem[k];
     I.parts.push(P); I.end += P.end; I.inN += P.inQ + P.inC; I.outN += P.outQ + P.outC;
-    if (P.end > 0) { if (boxq[whKey(P.p)]) I.box += slBoxes(P.p, P.end); else I.noBox++; }
+    if (P.end > 0) { if (msPer(P.p)) I.box += slBoxes(P.p, P.end); else I.noBox++; }
   });
   var itemsEnd = items.reduce(function (a, I) { return a + I.end; }, 0), itemsStock = items.filter(function (I) { return I.end; }).length;
   h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목별 재고</h3><span class="sheet-status">' + esc(slItemModel) + " · " + items.length + "개 품목 · 재고 있는 품목 " + itemsStock + "개 · 월말재고 합계 " + slFmt(itemsEnd) + " · 누르면 아래 품번 · 입고 · 출고가 그 품목만</span></div>" +
@@ -1827,13 +1889,13 @@ function slRender() {
   });
   var S = { prev: 0, inQ: 0, inC: 0, outQ: 0, outC: 0, end: 0 };
   list.forEach(function (P) { for (var f in S) S[f] += P[f]; });
-  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3 id="sl-parts-h">품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 품번을 누르면 LOT별 재고 · 상자당 수량을 적으면 배치도에 반영</span></div>" +
+  h += '<section class="sheet-panel"><div class="sheet-top"><div><h3 id="sl-parts-h">품번별 재고</h3><span class="sheet-status">' + list.length + " / " + C.parts.length + "개 품번 · 월말재고 = 전월재고 + 입고 + 입고취소 − (출고 + 출고취소) · 품번을 누르면 LOT별 재고 · 상자당 적재 수량은 기준정보 탭에서</span></div>" +
     '<div class="sheet-tools">' + (slName ? "" : '<span class="sl-chips">' + ['<button class="sl-chip" type="button" data-sl-model="" aria-pressed="' + (!slModel) + '">전체 차종</button>'].concat(models.map(function (x) { return '<button class="sl-chip" type="button" data-sl-model="' + esc(x) + '" aria-pressed="' + (slModel === x) + '">' + esc(x) + "</button>"; })).join("") + "</span>") +
     (slName ? '<button class="sl-chip" type="button" data-sl-item-clear aria-pressed="true">품목: ' + esc(slName.m + " · " + slName.n) + " ✕</button>" : '<label class="sl-check"><input type="checkbox" id="sl-active"' + (slActiveOnly ? " checked" : "") + "> 재고 · 입출고 있는 품번만</label>") +
     '<input class="sheet-search" id="sl-search" type="search" placeholder="품번 · 품명 찾기" aria-label="품번 · 품명 찾기" value="' + esc(slQ) + '"></div></div>';
-  h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th><th>상자당 수량</th><th>상자 수</th></tr></thead><tbody>' +
+  h += list.length ? '<div class="sum-scroll"><table class="sum-table"><thead><tr><th class="l">차종</th><th class="l">품명</th><th class="l">품번</th><th>전월재고</th><th>당월입고</th><th>입고취소</th><th>당월출고</th><th>출고취소</th><th>월말재고</th><th>상자당 적재</th><th>상자 수</th></tr></thead><tbody>' +
     list.map(function (P) {
-      var Ls = lotsBy[whKey(P.p)] || [], open = !!slOpenParts[whKey(P.p)], bad = Ls.some(function (L) { return L.st !== "ok"; }), per = boxq[whKey(P.p)];
+      var Ls = lotsBy[whKey(P.p)] || [], open = !!slOpenParts[whKey(P.p)], bad = Ls.some(function (L) { return L.st !== "ok"; }), per = msPer(P.p);
       var sub = open ? Ls.map(function (L, i) {
         return '<tr class="sl-lot"><td></td><td class="l">' + (i === 0 ? "LOT · 먼저 출고" : "") + '</td><td class="l mono">' + esc(L.lot || "–") + ' <span class="sl-lotd">' + esc(L.first ? L.first.slice(5) + " 입고" : "") + "</span>" + lotTag[L.st] + "</td>" +
           "<td></td>" + slCell(L.i) + "<td></td>" + slCell(L.o) + "<td></td>" + slCell(L.bal, "end" + (L.bal < 0 ? " neg" : "")) + "<td></td>" +
@@ -1842,8 +1904,8 @@ function slRender() {
       return '<tr' + (Ls.length ? ' class="sl-has-lot' + (open ? " open" : "") + '" data-sl-part="' + esc(P.p) + '" title="눌러서 LOT별 재고 ' + (open ? "접기" : "보기") + '"' : "") + '><td class="l">' + esc(P.model) + '</td><td class="l">' + esc(P.name) + '</td><td class="l mono">' +
         (Ls.length ? '<span class="sl-caret" aria-hidden="true">▸</span>' : '<span class="sl-caret"></span>') + esc(P.p) + (P.reg ? "" : ' <span class="sl-tag bad">미등록</span>') + (bad ? ' <span class="sl-lotn bad">LOT 확인</span>' : "") + "</td>" +
         slCell(P.prev) + slCell(P.inQ) + slCell(P.inC, "cx") + slCell(P.outQ) + slCell(P.outC, "cx") + slCell(P.end, "end" + (P.end < 0 ? " neg" : "")) +
-        '<td><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" data-boxq="' + esc(P.p) + '" value="' + (boxq[whKey(P.p)] || "") + '" placeholder="–" aria-label="' + esc(P.p) + ' 상자당 수량"></td>' +
-        '<td class="' + (P.end > 0 && !boxq[whKey(P.p)] ? "z" : "") + '">' + (P.end > 0 ? (boxq[whKey(P.p)] ? slFmt(slBoxes(P.p, P.end)) : "?") : "0") + "</td></tr>" + sub;
+        '<td' + (per ? "" : ' class="z" title="기준정보 탭에서 품목별로 입력"') + ">" + (per ? slFmt(per) : "–") + "</td>" +
+        '<td class="' + (P.end > 0 && !per ? "z" : "") + '">' + (P.end > 0 ? (per ? slFmt(slBoxes(P.p, P.end)) : "?") : "0") + "</td></tr>" + sub;
     }).join("") + '</tbody><tfoot><tr><td class="l" colspan="3">합계</td><td>' + slFmt(S.prev) + "</td><td>" + slFmt(S.inQ) + "</td><td>" + slFmt(S.inC) + "</td><td>" + slFmt(S.outQ) + "</td><td>" + slFmt(S.outC) + "</td><td>" + slFmt(S.end) + "</td><td></td><td>" + slFmt(list.reduce(function (a, P) { return a + slBoxes(P.p, P.end); }, 0)) + "</td></tr></tfoot></table></div>"
     : '<p class="sum-hint">조건에 맞는 품번이 없습니다.' + (slActiveOnly ? " ‘재고 · 입출고 있는 품번만’을 끄면 등록된 품번이 모두 보입니다." : "") + "</p>";
   h += "</section>";
@@ -1879,6 +1941,7 @@ function slLoad(file) {
     try { localStorage.setItem(SL_PREFIX + mon, JSON.stringify(res)); } catch (e) { saved = false; }
     if (!saved) { slStatus("저장하지 못했습니다(브라우저 저장 공간 부족?): " + file.name); return; }
     slSetCur(mon);
+    if (!ms.parts.length) { msSeed(res); msMigrateBox(); msSave(); }   // 기준정보가 비어 있으면 이 파일로 채웁니다
     if (mon === slMonths().slice(-1)[0]) slSyncMap();   // 가장 최근 달일 때만 배치도를 다시 그립니다
     slRender();
     slStatus(label + " · " + file.name + (old ? " · 새 파일로 바꿨습니다" : " · 저장했습니다") + (mon === slMonths().slice(-1)[0] ? " · 배치도 반영" : " · 지난 달이라 배치도는 그대로"));
@@ -1893,8 +1956,14 @@ function slLoad(file) {
   var wrap = document.getElementById("sl-wrap");
   wrap.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("input, label")) return;
-    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part],[data-sl-month]") : null;
+    var t = e.target.closest ? e.target.closest("[data-sl-load],[data-sl-model],[data-sl-item],[data-sl-item-model],[data-sl-item-clear],[data-sl-part],[data-sl-month],[data-ms-addfile]") : null;
     if (!t) return;
+    if (t.hasAttribute("data-ms-addfile")) {
+      var C0 = slCompute(), n0 = msSeed(sl, C0.unreg);
+      msSave(); slSyncMap(); slRender();
+      slStatus(n0 ? "기준정보에 " + n0 + "개 품번을 추가했습니다" : "엑셀 집계 시트에 차종 · 품명이 없는 품번이라 추가하지 못했습니다. 기준정보 탭에서 직접 추가해 주세요.");
+      return;
+    }
     if (t.hasAttribute("data-sl-month")) { slSetCur(t.getAttribute("data-sl-month")); slRender(); return; }
     if (t.hasAttribute("data-sl-part")) { var pk = whKey(t.getAttribute("data-sl-part")); if (slOpenParts[pk]) delete slOpenParts[pk]; else slOpenParts[pk] = 1; slRender(); return; }
     if (t.hasAttribute("data-sl-load")) { pick(); return; }
@@ -1917,17 +1986,94 @@ function slLoad(file) {
     }
     if (e.target.id === "sl-month") { slSetCur(e.target.value); slRender(); return; }
     if (e.target.id === "sl-active") { slActiveOnly = e.target.checked; slRender(); return; }
-    var p = e.target.getAttribute && e.target.getAttribute("data-boxq");
-    if (p == null) return;
-    var n = Math.floor(Number(e.target.value));
-    if (n > 0) boxq[whKey(p)] = n; else delete boxq[whKey(p)];
-    boxqSave(); slSyncMap(); slRender();
-    slStatus(p + (n > 0 ? " 상자당 " + n + "개로 저장 · 배치도에 반영했습니다" : " 상자당 수량을 지웠습니다 · 배치도에서 빠집니다"));
   });
   var timer = null;
   wrap.addEventListener("input", function (e) { if (e.target.id === "sl-search") { slQ = e.target.value; clearTimeout(timer); timer = setTimeout(slRender, 150); } });
   ["dragenter", "dragover"].forEach(function (ev) { wrap.addEventListener(ev, function (e) { if (whView === "sales") e.preventDefault(); }); });
   wrap.addEventListener("drop", function (e) { if (whView !== "sales") return; e.preventDefault(); var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) slLoad(f); });
+})();
+
+// ── 기준정보 화면 ──
+var msModel = "AC28";
+function msLinesOf(p) { var k = whKey(p); return WH_RACKS.map(function (r) { return r[0]; }).filter(function (l) { return wh.lines[l] && whKey(wh.lines[l]) === k; }); }
+function msRender() {
+  var el = document.getElementById("ms-wrap"), models = msModels();
+  if (models.indexOf(msModel) < 0) msModel = models[0] || "";
+  document.getElementById("wh-bar-status").textContent = "기준정보 · 품목 " + msItems().length + "개 · 품번 " + ms.parts.length + "개";
+  var latest = slLatest();
+  if (!ms.parts.length) {
+    el.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">기준정보가 비어 있습니다</h3>' +
+      '<p class="sum-hint">영업창고 엑셀(집계 시트)의 차종 · 품명 · 품번으로 채우거나, 아래에서 품번을 하나씩 추가하세요.</p>' +
+      (latest ? '<div class="sheet-tools"><button class="btn primary" type="button" data-ms-seed>' + latest.month.slice(0, 4) + "년 " + (+latest.month.slice(5, 7)) + "월 엑셀로 채우기</button></div>" : "") + "</section>" + msAddForm();
+    return;
+  }
+  var items = msItems(msModel), noBox = items.filter(function (I) { return !ms.box[msKey(I.m, I.n)]; }).length;
+  var dl = '<datalist id="ms-dl-item">' + items.map(function (I) { return '<option value="' + esc(I.n) + '">'; }).join("") + "</datalist>";
+  var h = '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목 · 상자당 적재 수량</h3><span class="sheet-status">' + esc(msModel) + " · 품목 " + items.length + "개 · 품번 " + items.reduce(function (a, I) { return a + I.parts.length; }, 0) + "개" + (noBox ? " · 상자당 수량 미입력 " + noBox + "개" : " · 모두 입력됨") + " · 같은 품목이면 품번이 달라도 같은 수량</span></div>" +
+    '<div class="sheet-tools"><span class="sl-chips">' + models.map(function (x) { return '<button class="sl-chip" type="button" data-ms-model="' + esc(x) + '" aria-pressed="' + (x === msModel) + '">' + esc(x) + "</button>"; }).join("") + "</span></div></div>" +
+    '<div class="sum-scroll"><table class="sum-table ms-table"><thead><tr><th class="l">품목</th><th>상자당 적재 수량</th><th class="l">품번 · 품목 바꾸기 · 배치 라인</th></tr></thead><tbody>' +
+    items.map(function (I) {
+      var k = msKey(I.m, I.n), v = ms.box[k] || "";
+      return '<tr><td class="l ms-item">' + esc(I.n) + '</td><td><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" data-ms-box="' + esc(k) + '" value="' + v + '" placeholder="입력" aria-label="' + esc(I.n) + ' 상자당 적재 수량"></td>' +
+        '<td class="l ms-parts">' + I.parts.map(function (x) {
+          var ls = msLinesOf(x.p);
+          return '<span class="ms-part"><b>' + esc(x.p) + '</b><input class="ms-name" list="ms-dl-item" data-ms-name="' + esc(x.p) + '" value="' + esc(x.n) + '" aria-label="' + esc(x.p) + ' 품목">' +
+            (ls.length ? '<span class="sl-tag ok">' + ls.join(", ") + "라인</span>" : "") +
+            '<button class="ms-del" type="button" data-ms-del="' + esc(x.p) + '" title="' + esc(x.p) + ' 기준정보에서 빼기" aria-label="' + esc(x.p) + ' 빼기">✕</button></span>';
+        }).join("") + "</td></tr>";
+    }).join("") + "</tbody></table></div>" + dl +
+    '<p class="sum-hint">상자당 적재 수량을 바꾸면 품목별 재고 · 품번별 재고의 상자 수와 배치도가 바로 다시 계산됩니다. 품번의 품목 칸을 바꾸면 그 품번이 다른 품목으로 옮겨 갑니다. 배치 라인은 배치도 탭의 라인별 품목 등록에서 정합니다.</p></section>';
+  // 가장 최근 엑셀에 있는데 기준정보에 없는 품번
+  var miss = latest ? latest.master.filter(function (x) { return !msPart(x[2]); }) : [];
+  if (miss.length) h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>엑셀에만 있는 품번 ' + miss.length + '개</h3><span class="sheet-status">' + latest.month + " 엑셀 집계 시트 · " + esc(miss.slice(0, 8).map(function (x) { return x[2]; }).join(", ")) + (miss.length > 8 ? " 외" : "") + '</span></div><div class="sheet-tools"><button class="btn" type="button" data-ms-seed>엑셀에 적힌 대로 추가</button></div></div></section>';
+  el.innerHTML = h + msAddForm();
+}
+function msAddForm() {
+  var models = msModels(), items = msItems();
+  return '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번 추가</h3><span class="sheet-status">새 품목이면 품목 이름을 새로 적으면 됩니다</span></div></div>' +
+    '<form class="ms-add" id="ms-add-form"><label>차종<input id="ms-add-m" list="ms-dl-m" required value="' + esc(msModel) + '"></label>' +
+    '<label>품목<input id="ms-add-n" list="ms-dl-n" required></label><label>품번<input id="ms-add-p" required></label><button class="btn primary" type="submit">추가</button></form>' +
+    '<datalist id="ms-dl-m">' + models.map(function (m) { return '<option value="' + esc(m) + '">'; }).join("") + "</datalist>" +
+    '<datalist id="ms-dl-n">' + items.map(function (I) { return '<option value="' + esc(I.n) + '">' + esc(I.m) + "</option>"; }).join("") + "</datalist></section>";
+}
+function msChanged(msg) { msIndex(); msSave(); slSyncMap(); msRender(); document.getElementById("wh-bar-status").textContent = msg; }
+(function () {
+  var el = document.getElementById("ms-wrap");
+  el.addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-ms-model],[data-ms-del],[data-ms-seed]") : null;
+    if (!t) return;
+    if (t.hasAttribute("data-ms-model")) { msModel = t.getAttribute("data-ms-model"); msRender(); return; }
+    if (t.hasAttribute("data-ms-seed")) { var n = msSeed(slLatest()); if (!ms.parts.length) return; msMigrateBox(); msChanged("기준정보에 " + n + "개 품번을 추가했습니다"); return; }
+    var p = t.getAttribute("data-ms-del");
+    if (!confirm(p + " 품번을 기준정보에서 뺍니다. 엑셀에 이 품번이 나오면 ‘기준정보에 없는 품번’으로 표시됩니다. 계속할까요?")) return;
+    ms.parts = ms.parts.filter(function (x) { return whKey(x.p) !== whKey(p); });
+    msChanged(p + " 품번을 뺐습니다");
+  });
+  el.addEventListener("change", function (e) {
+    var k = e.target.getAttribute && e.target.getAttribute("data-ms-box");
+    if (k != null) {
+      var n = Math.floor(Number(e.target.value)), nm = k.split("|")[1];
+      if (n > 0) ms.box[k] = n; else delete ms.box[k];
+      msChanged(nm + (n > 0 ? " 상자당 " + n + "개로 저장 · 상자 수와 배치도에 반영했습니다" : " 상자당 수량을 지웠습니다 · 배치도에서 빠집니다"));
+      return;
+    }
+    var p = e.target.getAttribute && e.target.getAttribute("data-ms-name");
+    if (p != null) {
+      var v = e.target.value.trim(), x = msPart(p);
+      if (!x || !v || v === x.n) { msRender(); return; }
+      var old = x.n; x.n = v;
+      msChanged(p + " 품번을 " + old + " → " + v + " 품목으로 옮겼습니다");
+    }
+  });
+  el.addEventListener("submit", function (e) {
+    if (e.target.id !== "ms-add-form") return;
+    e.preventDefault();
+    var m = document.getElementById("ms-add-m").value.trim(), n = document.getElementById("ms-add-n").value.trim(), p = document.getElementById("ms-add-p").value.trim();
+    if (!m || !n || !p) return;
+    if (msPart(p)) { document.getElementById("wh-bar-status").textContent = p + " 품번은 이미 있습니다 (" + msPart(p).m + " · " + msPart(p).n + ")"; return; }
+    ms.parts.push({ m: m, n: n, p: p }); msModel = m;
+    msChanged(m + " · " + n + " · " + p + " 품번을 추가했습니다");
+  });
 })();
 
 var ORDER = ["machining", "assembly", "shipping", "warehouse"];
@@ -2023,7 +2169,7 @@ document.getElementById("stamp").textContent =
     appId: "1:211055062030:web:40edbca4b80f27fbaea05f"
   });
   var auth = firebase.auth(), col = firebase.firestore().collection("pml");
-  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1", "pl-boxq1"];
+  var KEYS = ["pl-plan2-machining", "pl-plan2-assembly", "pl-plan2-shipping", "pl-hist1", "pl-wh1", "pl-sales1", "pl-boxq1", "pl-master1"];
   function isShared(k) { return KEYS.indexOf(k) >= 0 || /^pl-sales-\d{4}-\d{2}$/.test(k); }   // 영업창고 달별 키도 공유
   function sharedLocalKeys() { var out = KEYS.slice(); try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^pl-sales-\d{4}-\d{2}$/.test(k)) out.push(k); } } catch (e) {} return out; }
   var META_KEY = "pl-sync-meta", MAX_BYTES = 950000;
@@ -2079,6 +2225,12 @@ document.getElementById("stamp").textContent =
           if (!wh.lines) wh.lines = {};
           if (!wh.log) wh.log = [];
           whSel = null;
+        } else if (k === "pl-master1") {
+          var mv = null;
+          try { mv = JSON.parse(v || "null"); } catch (e) {}
+          ms = mv && mv.parts ? mv : { parts: [], box: {} };
+          if (!ms.box) ms.box = {};
+          msIndex();
         } else if (k === "pl-boxq1") {
           try { boxq = JSON.parse(v || "{}") || {}; } catch (e) { boxq = {}; }
         } else if (k === "pl-sales1") {
