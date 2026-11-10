@@ -142,10 +142,17 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .wh-map .lbl.dk { fill: #3b3200; }
 .wh-map .rack { fill: none; stroke: var(--fg); stroke-width: 1.5; }
 .wh-map .cell { fill: var(--surface); stroke: var(--line); stroke-width: 1; cursor: pointer; }
-.wh-lines { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.wh-lines { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.wh-grp { display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; background: var(--slot); min-width: 0; }
+.wh-grp-h { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 13px; }
+.wh-grp-h span { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wh-grp-name, .wh-grp-item { font: inherit; font-size: 13px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; min-width: 0; width: 100%; }
+.wh-grp-name { font-weight: 600; }
+.wh-grp-name:focus-visible, .wh-grp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .wh-lines label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
 .wh-lines input { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; min-width: 0; width: 100%; }
-@media (max-width: 760px) { .wh-lines { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .wh-lines { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .wh-lines { grid-template-columns: 1fr; } }
 .wh-map .cell.full { stroke: rgba(0, 0, 0, 0.35); }
 .wh-map .cell.dim { opacity: 0.18; }
 .wh-map .cell.sel { stroke: var(--fg); stroke-width: 2.5; }
@@ -153,6 +160,7 @@ body.wide #sheet-panel { width: calc(100vw - 40px); margin-left: calc(50% - 50vw
 .wh-map .cell.stage:hover { stroke: var(--line); stroke-width: 1; }
 .wh-map .cell:hover { stroke: var(--accent); stroke-width: 2; }
 .wh-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.wh-legend i.cellsw { width: 9px; height: 16px; border-radius: 1px; vertical-align: -3px; }
 .wh-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.25); }
 .wh-info { font-size: 13px; min-height: 20px; }
 .wh-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -474,7 +482,7 @@ tr.open .sl-caret { transform: rotate(90deg); }
       <div class="sheet-top">
         <div>
           <h3>창고 배치도</h3>
-          <span class="sheet-status">라인 6개(A~F) · 라인마다 한 품목, 단프라 15상자 · 총 90자리</span>
+          <span class="sheet-status">라인 6개(A~F) · 라인마다 단프라 15상자 · 총 90자리 · 라인에 정한 품목만 그 라인에 들어감</span>
         </div>
         <div class="sheet-tools">
           <input class="sheet-search" id="wh-search" type="search" placeholder="품번 찾기" aria-label="품번 찾기">
@@ -485,7 +493,7 @@ tr.open .sl-caret { transform: rotate(90deg); }
       <div class="wh-info" id="wh-info"></div>
       <div class="wh-legend" id="wh-legend"></div>
       <div>
-        <p class="sum-hint" style="margin-bottom:6px"><b>라인별 품목 등록</b> · 품번을 적어 두면 그 품목은 그 라인으로만 들어갑니다. 비워 둔 라인은 처음 들어온 품목이 임시로 차지합니다.</p>
+        <p class="sum-hint" style="margin-bottom:6px"><b>라인별 품목</b> · 칸마다 품목을 고르면 그 품목 상자는 그 라인에만 들어갑니다. B·C, D·E는 두 라인이 같은 품목을 씁니다. 어느 라인에도 없는 품목은 품목을 비워 둔 라인으로 가고, 그런 라인도 없으면 적재 창고에 남습니다.</p>
         <div class="wh-lines" id="wh-lines"></div>
       </div>
     </section>
@@ -1251,14 +1259,34 @@ function whLineBoxes(line) {   // 그 라인의 상자를 자리 번호 순으�
 }
 function whSetLine(line, boxes) { for (var n = 1; n <= WH_N; n++) { if (boxes[n - 1]) wh.slots[line + "-" + n] = boxes[n - 1]; else delete wh.slots[line + "-" + n]; } }
 // 그 품목이 들어갈 수 있는 라인들: 등록된 라인이 있으면 그 라인만, 없으면 지금 그 품목이 놓인 라인, 그것도 없으면 등록 없는 빈 라인 하나.
+// 라인 묶음: A(1칸) · B·C(같은 품목, 1칸) · D·E(같은 품목, 4칸) · F(8칸). 칸마다 기준정보의 품목 하나("차종|품목").
+var WH_GROUPS = [{ id: "A", lines: ["A"], n: 1 }, { id: "BC", lines: ["B", "C"], n: 1 }, { id: "DE", lines: ["D", "E"], n: 4 }, { id: "F", lines: ["F"], n: 8 }];
+function whGroupLabel(g) { return g.lines.join("·") + "라인"; }
+function whGroups() {   // wh.groups = { A: { name, items: [...] }, … }. 예전 라인별 글자(wh.lines)는 처음 한 번 라인 이름 · 품목으로 옮깁니다.
+  if (wh.groups) return wh.groups;
+  var ready = typeof ms !== "undefined" && ms && ms.parts && ms.parts.length > 0, G = {};   // 기준정보를 읽기 전이면 임시로만 만들고 저장하지 않습니다
+  WH_GROUPS.forEach(function (g) {
+    var txt = "", items = [];
+    g.lines.forEach(function (l) { if (!txt && wh.lines && wh.lines[l]) txt = String(wh.lines[l]).trim(); });
+    if (txt && ready) {
+      var x = msPart(txt), hit = msItems().filter(function (I) { return I.n.toUpperCase() === txt.toUpperCase(); });
+      var nOf = function (m) { return ms.parts.filter(function (q) { return q.m === m; }).length; };
+      hit.sort(function (a, b) { return nOf(b.m) - nOf(a.m); });   // 같은 품목 이름이 여러 차종에 있으면 품번이 많은 차종(AC28) 쪽
+      if (x) items.push(msKey(x.m, x.n)); else if (hit.length) items.push(msKey(hit[0].m, hit[0].n));
+    }
+    G[g.id] = { name: txt, items: items };
+  });
+  if (ready) wh.groups = G;
+  return G;
+}
 function whLinesFor(pno, forInbound) {
-  var key = whKey(pno), names = WH_RACKS.map(function (r) { return r[0]; });
-  var reg = names.filter(function (l) { return wh.lines[l] && whKey(wh.lines[l]) === key; });
-  if (reg.length) return reg;
-  var held = names.filter(function (l) { var b = whLineBoxes(l); return !wh.lines[l] && b.length && whKey(b[0].p) === key; });
-  if (held.length || !forInbound) return held;
-  var free = names.filter(function (l) { return !wh.lines[l] && !whLineBoxes(l).length; });
-  return free.slice(0, 1);
+  var x = typeof msPart === "function" ? msPart(pno) : null, key = x ? msKey(x.m, x.n) : "", G = whGroups(), out = [], open = [];
+  WH_GROUPS.forEach(function (g) {
+    var its = (G[g.id] && G[g.id].items || []).filter(Boolean);
+    if (key && its.indexOf(key) >= 0) out = out.concat(g.lines);
+    else if (!its.length) open = open.concat(g.lines);
+  });
+  return out.length ? out : open;   // 정한 라인이 없으면 품목을 비워 둔 라인
 }
 // 예전 저장 형식("A-칸-단")이면 새 규칙으로 다시 배치합니다.
 (function () {
@@ -1366,13 +1394,22 @@ function whRender() {
     (L.missing.length ? ' · <span class="wh-part">상자당 수량 미입력 ' + L.missing.length + "개 품번 빠짐 (" + esc(L.missing.join(", ")) + ")</span>" : "") +
     (L.over ? ' · <span class="wh-part">라인 자리가 없어 ' + L.over + "상자는 적재 창고에 있음</span>" : "") +
     " · 영업창고 현황 탭에서 대장을 다시 넣거나 상자당 수량을 바꾸면 배치도가 다시 그려집니다.";
-  var leg = '<span><i style="background:var(--surface)"></i>빈 자리</span>';
+  var leg = '<span><i class="cellsw" style="background:var(--surface)"></i>흰 칸 = 빈 자리</span>';
   order.forEach(function (g) { leg += '<span><i style="background:' + whColor(g.p) + '"></i>' + esc(g.p) + " (" + g.c + ")</span>"; });
   document.getElementById("wh-legend").innerHTML = leg;
+  var G = whGroups(), all = typeof msItems === "function" ? msItems() : [], usedBy = {};
+  WH_GROUPS.forEach(function (g) { (G[g.id].items || []).forEach(function (k) { if (k) usedBy[k] = whGroupLabel(g); }); });
   var lh = "";
-  WH_RACKS.forEach(function (r) {
-    var held = whLineBoxes(r[0]), auto = !wh.lines[r[0]] && held.length ? held[0].p : "";
-    lh += "<label>" + r[0] + "라인" + (auto ? " (임시)" : "") + '<input type="text" data-line="' + r[0] + '" value="' + esc(wh.lines[r[0]] || "") + '" placeholder="' + esc(auto || "품번") + '" aria-label="' + r[0] + '라인 품번"></label>';
+  WH_GROUPS.forEach(function (g) {
+    var cfg = G[g.id], cnt = g.lines.reduce(function (a, l) { return a + whLineBoxes(l).length; }, 0);
+    lh += '<div class="wh-grp"><div class="wh-grp-h"><b>' + whGroupLabel(g) + '</b><span>' + cnt + " / " + g.lines.length * WH_N + "상자</span></div>" +
+      '<input class="wh-grp-name" type="text" data-gname="' + g.id + '" value="' + esc(cfg.name || "") + '" placeholder="라인 이름 (예: FRONT)" aria-label="' + whGroupLabel(g) + ' 이름">';
+    for (var i = 0; i < g.n; i++) {
+      var v = (cfg.items || [])[i] || "";
+      lh += '<select class="wh-grp-item" data-gitem="' + g.id + '" data-idx="' + i + '" aria-label="' + whGroupLabel(g) + " 품목 " + (i + 1) + '"><option value="">– 품목 선택 –</option>' +
+        all.map(function (I) { var k = msKey(I.m, I.n), other = usedBy[k] && k !== v ? " (" + usedBy[k] + ")" : ""; return '<option value="' + esc(k) + '"' + (k === v ? " selected" : "") + ">" + esc(I.m + " · " + I.n) + other + "</option>"; }).join("") + "</select>";
+    }
+    lh += "</div>";
   });
   if (!document.getElementById("wh-lines").contains(document.activeElement)) document.getElementById("wh-lines").innerHTML = lh;
   var info = document.getElementById("wh-info");
@@ -1533,7 +1570,7 @@ document.getElementById("wh-undo").addEventListener("click", function () {
 });
 document.getElementById("wh-reset").addEventListener("click", function () {
   if (!confirm("창고 배치와 처리 내역을 모두 지웁니다. 계속할까요?")) return;
-  wh = { slots: {}, lines: wh.lines || {}, log: [], seq: 1, undo: null, fromLedger: null };   // 라인별 품목 등록은 남겨 둡니다
+  wh = { slots: {}, lines: wh.lines || {}, groups: wh.groups, log: [], seq: 1, undo: null, fromLedger: null };   // 라인별 품목 등록은 남겨 둡니다
   whSel = null; whSave(); whRender();
   whStatus("창고를 비웠습니다.");
 });
@@ -1543,19 +1580,22 @@ document.getElementById("wh-map").addEventListener("click", function (e) {
   whSel = whSel === id ? null : id;
   whRender();
 });
-// 라인별 품목 등록: 그 라인에 다른 품목 상자가 놓여 있으면 바꾸지 않습니다.
+// 라인별 품목: 바꾸면 배치도를 그 기준으로 다시 놓습니다(영업창고 대장 기준).
 document.getElementById("wh-lines").addEventListener("change", function (e) {
-  var line = e.target && e.target.getAttribute && e.target.getAttribute("data-line");
-  if (!line) return;
-  var v = e.target.value.trim(), held = whLineBoxes(line);
-  if (v && held.length && whKey(held[0].p) !== whKey(v)) {
-    whStatus(line + "라인에는 지금 " + held[0].p + " 상자가 있어 " + v + "(으)로 등록할 수 없습니다. 먼저 출고해 비워 주세요.");
-  } else {
-    if (v) wh.lines[line] = v; else delete wh.lines[line];
-    whSave();
-    whStatus(v ? line + "라인을 " + v + " 전용으로 등록했습니다." : line + "라인 등록을 지웠습니다.");
+  var t = e.target, G = whGroups(), id, msg;
+  if (t.hasAttribute("data-gname")) {
+    id = t.getAttribute("data-gname"); G[id].name = t.value.trim();
+    whSave(); whStatus(whGroupLabel(WH_GROUPS.filter(function (g) { return g.id === id; })[0]) + " 이름을 저장했습니다."); return;
   }
-  e.target.blur(); whRender();
+  if (!t.hasAttribute("data-gitem")) return;
+  id = t.getAttribute("data-gitem");
+  var g = WH_GROUPS.filter(function (x) { return x.id === id; })[0], arr = (G[id].items || []).slice();
+  while (arr.length < g.n) arr.push("");
+  arr[+t.getAttribute("data-idx")] = t.value;
+  G[id].items = arr;
+  msg = whGroupLabel(g) + " 품목을 " + (t.value ? t.value.replace("|", " · ") + "(으)로" : "비움으로") + " 바꿨습니다";
+  if (typeof slSyncMap === "function" && slLatest()) { slSyncMap(); msg += " · 배치도를 다시 놓았습니다"; } else whSave();
+  whRender(); whStatus(msg);
 });
 var whSearchTimer = null;
 document.getElementById("wh-search").addEventListener("input", function () { clearTimeout(whSearchTimer); whSearchTimer = setTimeout(whRender, 120); });
@@ -2012,7 +2052,7 @@ function slLoad(file) {
 // 왼쪽에서 품목을 고르고, 오른쪽에서 그 품목의 상자당 적재 수량과 품번을 입력 · 수정 · 삭제합니다.
 // 품목은 이미 정해져 있으므로 품번마다 품목을 다시 적지 않습니다.
 var msModel = "AC28", msItem = "", msBusy = false;
-function msLinesOf(p) { var k = whKey(p); return WH_RACKS.map(function (r) { return r[0]; }).filter(function (l) { return wh.lines[l] && whKey(wh.lines[l]) === k; }); }
+function msLinesOf(p) { var x = msPart(p), G = whGroups(); if (!x) return []; var k = msKey(x.m, x.n); return WH_GROUPS.filter(function (g) { return (G[g.id].items || []).indexOf(k) >= 0; }).map(function (g) { return g.lines.join("·"); }); }
 function msSay(t) { document.getElementById("wh-bar-status").textContent = t; }
 function msRender() {
   var el = document.getElementById("ms-wrap"), models = msModels(), latest = slLatest();
