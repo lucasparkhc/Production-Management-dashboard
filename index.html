@@ -254,18 +254,35 @@ tr.open .sl-caret { transform: rotate(90deg); }
 #ms-wrap { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 #ms-wrap .sum-scroll { max-height: none; }
 #ms-wrap .sum-table thead th { white-space: nowrap; }
-.ms-table td { vertical-align: top; }
-.ms-table td.ms-item { font-weight: 600; padding-top: 10px; }
-.ms-table td.ms-parts { white-space: normal; display: flex; flex-wrap: wrap; gap: 6px 10px; }
-.ms-part { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px 3px 8px; background: var(--slot); }
-.ms-part b { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
-.ms-name { font: inherit; font-size: 12px; width: 110px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
-.ms-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ms-del { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 4px; }
-.ms-del:hover { color: #c62828; }
-.ms-add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-.ms-add label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-.ms-add input { font: inherit; font-size: 13px; color: var(--fg); background: var(--slot); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; width: 160px; max-width: 100%; }
+.ms-grid { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.ms-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.ms-li { appearance: none; font: inherit; text-align: left; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.ms-li:last-child { border-bottom: 0; }
+.ms-li:hover { background: var(--slot); }
+.ms-li:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ms-li[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.ms-li .nm { font-size: 14px; font-weight: 600; }
+.ms-li .bx { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ms-li .bx.no { color: #b26a00; }
+.ms-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ms-dhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ms-dhead h4 { margin: 0; font-size: 18px; font-weight: 700; }
+.ms-box { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.ms-box span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); }
+.ms-box .sl-boxq { width: 110px; font-size: 15px; padding: 6px 9px; }
+.ms-plist { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; max-width: 520px; }
+.ms-ph { font-size: 12px; font-weight: 600; color: var(--fg); background: var(--accent-soft); padding: 7px 12px; border-bottom: 2px solid var(--accent); }
+.ms-prow { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); margin: 0; }
+.ms-prow:last-child { border-bottom: 0; }
+.ms-pin { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13px; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px 6px; }
+.ms-pin:hover { border-color: var(--line); }
+.ms-pin:focus { background: var(--slot); border-color: var(--accent); outline: none; }
+.ms-addrow { background: var(--slot); }
+.ms-addrow .ms-pin { border-color: var(--line); background: var(--surface); }
+.ms-del { appearance: none; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; padding: 3px 8px; }
+.ms-del:hover { color: #c62828; border-color: #e8a1a1; }
+.ms-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 700px) { .ms-grid { grid-template-columns: 1fr; } .ms-list { max-height: 260px; overflow-y: auto; } }
 .sl-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .sl-year { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .sl-past { margin: 0; padding: 10px 14px; border-radius: 5px; border: 1px solid var(--s1); background: color-mix(in srgb, var(--s1) 10%, transparent); font-size: 13px; }
@@ -1992,85 +2009,102 @@ function slLoad(file) {
 })();
 
 // ── 기준정보 화면 ──
-var msModel = "AC28";
+// 왼쪽에서 품목을 고르고, 오른쪽에서 그 품목의 상자당 적재 수량과 품번을 입력 · 수정 · 삭제합니다.
+// 품목은 이미 정해져 있으므로 품번마다 품목을 다시 적지 않습니다.
+var msModel = "AC28", msItem = "", msBusy = false;
 function msLinesOf(p) { var k = whKey(p); return WH_RACKS.map(function (r) { return r[0]; }).filter(function (l) { return wh.lines[l] && whKey(wh.lines[l]) === k; }); }
+function msSay(t) { document.getElementById("wh-bar-status").textContent = t; }
 function msRender() {
-  var el = document.getElementById("ms-wrap"), models = msModels();
+  var el = document.getElementById("ms-wrap"), models = msModels(), latest = slLatest();
   if (models.indexOf(msModel) < 0) msModel = models[0] || "";
-  document.getElementById("wh-bar-status").textContent = "기준정보 · 품목 " + msItems().length + "개 · 품번 " + ms.parts.length + "개";
-  var latest = slLatest();
   if (!ms.parts.length) {
+    msSay("기준정보 · 비어 있음");
     el.innerHTML = '<section class="sheet-panel sl-empty"><h3 style="margin:0;font-size:15px">기준정보가 비어 있습니다</h3>' +
-      '<p class="sum-hint">영업창고 엑셀(집계 시트)의 차종 · 품명 · 품번으로 채우거나, 아래에서 품번을 하나씩 추가하세요.</p>' +
-      (latest ? '<div class="sheet-tools"><button class="btn primary" type="button" data-ms-seed>' + latest.month.slice(0, 4) + "년 " + (+latest.month.slice(5, 7)) + "월 엑셀로 채우기</button></div>" : "") + "</section>" + msAddForm();
+      '<p class="sum-hint">영업창고 엑셀(집계 시트)의 차종 · 품명 · 품번으로 채웁니다.</p>' +
+      (latest ? '<div class="sheet-tools"><button class="btn primary" type="button" data-ms-seed>' + latest.month.slice(0, 4) + "년 " + (+latest.month.slice(5, 7)) + "월 엑셀로 채우기</button></div>" : '<p class="sum-hint">먼저 영업창고 현황 탭에서 월간 입출고 엑셀을 넣어 주세요.</p>') + "</section>";
     return;
   }
-  var items = msItems(msModel), noBox = items.filter(function (I) { return !ms.box[msKey(I.m, I.n)]; }).length;
-  var dl = '<datalist id="ms-dl-item">' + items.map(function (I) { return '<option value="' + esc(I.n) + '">'; }).join("") + "</datalist>";
-  var h = '<section class="sheet-panel"><div class="sheet-top"><div><h3>품목 · 상자당 적재 수량</h3><span class="sheet-status">' + esc(msModel) + " · 품목 " + items.length + "개 · 품번 " + items.reduce(function (a, I) { return a + I.parts.length; }, 0) + "개" + (noBox ? " · 상자당 수량 미입력 " + noBox + "개" : " · 모두 입력됨") + " · 같은 품목이면 품번이 달라도 같은 수량</span></div>" +
+  var items = msItems(msModel);
+  if (!items.some(function (I) { return I.n === msItem; })) msItem = items.length ? items[0].n : "";
+  var cur = items.filter(function (I) { return I.n === msItem; })[0], key = cur ? msKey(cur.m, cur.n) : "", noBox = items.filter(function (I) { return !ms.box[msKey(I.m, I.n)]; }).length;
+  msSay("기준정보 · " + msModel + " 품목 " + items.length + "개 · 품번 " + items.reduce(function (a, I) { return a + I.parts.length; }, 0) + "개" + (noBox ? " · 상자당 수량 미입력 " + noBox + "개" : ""));
+
+  var h = '<section class="sheet-panel"><div class="sheet-top"><div><h3>기준정보</h3><span class="sheet-status">품목을 고르고 상자당 적재 수량과 품번을 관리합니다 · 같은 품목이면 품번이 달라도 상자당 수량은 같음</span></div>' +
     '<div class="sheet-tools"><span class="sl-chips">' + models.map(function (x) { return '<button class="sl-chip" type="button" data-ms-model="' + esc(x) + '" aria-pressed="' + (x === msModel) + '">' + esc(x) + "</button>"; }).join("") + "</span></div></div>" +
-    '<div class="sum-scroll"><table class="sum-table ms-table"><thead><tr><th class="l">품목</th><th>상자당 적재 수량</th><th class="l">품번 · 품목 바꾸기 · 배치 라인</th></tr></thead><tbody>' +
+    '<div class="ms-grid"><div class="ms-list" role="listbox" aria-label="품목">' +
     items.map(function (I) {
-      var k = msKey(I.m, I.n), v = ms.box[k] || "";
-      return '<tr><td class="l ms-item">' + esc(I.n) + '</td><td><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" data-ms-box="' + esc(k) + '" value="' + v + '" placeholder="입력" aria-label="' + esc(I.n) + ' 상자당 적재 수량"></td>' +
-        '<td class="l ms-parts">' + I.parts.map(function (x) {
-          var ls = msLinesOf(x.p);
-          return '<span class="ms-part"><b>' + esc(x.p) + '</b><input class="ms-name" list="ms-dl-item" data-ms-name="' + esc(x.p) + '" value="' + esc(x.n) + '" aria-label="' + esc(x.p) + ' 품목">' +
-            (ls.length ? '<span class="sl-tag ok">' + ls.join(", ") + "라인</span>" : "") +
-            '<button class="ms-del" type="button" data-ms-del="' + esc(x.p) + '" title="' + esc(x.p) + ' 기준정보에서 빼기" aria-label="' + esc(x.p) + ' 빼기">✕</button></span>';
-        }).join("") + "</td></tr>";
-    }).join("") + "</tbody></table></div>" + dl +
-    '<p class="sum-hint">상자당 적재 수량을 바꾸면 품목별 재고 · 품번별 재고의 상자 수와 배치도가 바로 다시 계산됩니다. 품번의 품목 칸을 바꾸면 그 품번이 다른 품목으로 옮겨 갑니다. 배치 라인은 배치도 탭의 라인별 품목 등록에서 정합니다.</p></section>';
-  // 가장 최근 엑셀에 있는데 기준정보에 없는 품번
+      var b = ms.box[msKey(I.m, I.n)];
+      return '<button class="ms-li" type="button" role="option" data-ms-item="' + esc(I.n) + '" aria-selected="' + (I.n === msItem) + '"><span class="nm">' + esc(I.n) + '</span><span class="bx' + (b ? "" : " no") + '">' + (b ? "상자당 " + b + "개" : "수량 미입력") + "</span></button>";
+    }).join("") + "</div>";
+  if (cur) {
+    h += '<div class="ms-detail"><div class="ms-dhead"><h4>' + esc(cur.n) + '</h4><span class="sheet-status">' + esc(cur.m) + " · 품번 " + cur.parts.length + "개</span></div>" +
+      '<label class="ms-box">상자당 적재 수량<span><input class="sl-boxq" type="number" min="1" step="1" inputmode="numeric" id="ms-box" data-ms-box="' + esc(key) + '" value="' + (ms.box[key] || "") + '" placeholder="입력"> 개</span></label>' +
+      '<div class="ms-plist"><div class="ms-ph">품번</div>' +
+      cur.parts.map(function (x) {
+        var ls = msLinesOf(x.p);
+        return '<div class="ms-prow"><input class="ms-pin" data-ms-p="' + esc(x.p) + '" value="' + esc(x.p) + '" aria-label="품번 ' + esc(x.p) + ' 수정">' +
+          (ls.length ? '<span class="sl-tag ok">' + ls.join(", ") + "라인</span>" : "") +
+          '<button class="ms-del" type="button" data-ms-del="' + esc(x.p) + '" aria-label="' + esc(x.p) + ' 삭제">삭제</button></div>';
+      }).join("") +
+      '<form class="ms-prow ms-addrow" id="ms-add-form"><input class="ms-pin" id="ms-add-p" placeholder="새 품번" aria-label="' + esc(cur.n) + '에 품번 추가" required><button class="btn primary" type="submit">추가</button></form></div>' +
+      '<p class="sum-hint">품번 칸을 고치고 다른 곳을 누르면 저장됩니다. 상자당 수량을 바꾸면 상자 수와 배치도가 바로 다시 계산됩니다.</p></div>';
+  }
+  h += "</div></section>";
   var miss = latest ? latest.master.filter(function (x) { return !msPart(x[2]); }) : [];
-  if (miss.length) h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>엑셀에만 있는 품번 ' + miss.length + '개</h3><span class="sheet-status">' + latest.month + " 엑셀 집계 시트 · " + esc(miss.slice(0, 8).map(function (x) { return x[2]; }).join(", ")) + (miss.length > 8 ? " 외" : "") + '</span></div><div class="sheet-tools"><button class="btn" type="button" data-ms-seed>엑셀에 적힌 대로 추가</button></div></div></section>';
-  el.innerHTML = h + msAddForm();
+  if (miss.length) h += '<section class="sheet-panel"><div class="sheet-top"><div><h3>엑셀에만 있는 품번 ' + miss.length + '개</h3><span class="sheet-status">' + latest.month + " 엑셀 집계 시트 · " + esc(miss.slice(0, 8).map(function (x) { return x[2]; }).join(", ")) + (miss.length > 8 ? " 외" : "") + '</span></div><div class="sheet-tools"><button class="btn" type="button" data-ms-seed>엑셀에 적힌 품목으로 추가</button></div></div></section>';
+  var focusId = document.activeElement && document.activeElement.id;
+  msBusy = true;   // 칸을 바꾸는 동안 사라지는 입력 칸에서 생기는 change 이벤트는 무시
+  try { el.innerHTML = h; } finally { msBusy = false; }
+  if (focusId === "ms-add-p") { var f = document.getElementById("ms-add-p"); if (f) f.focus(); }
 }
-function msAddForm() {
-  var models = msModels(), items = msItems();
-  return '<section class="sheet-panel"><div class="sheet-top"><div><h3>품번 추가</h3><span class="sheet-status">새 품목이면 품목 이름을 새로 적으면 됩니다</span></div></div>' +
-    '<form class="ms-add" id="ms-add-form"><label>차종<input id="ms-add-m" list="ms-dl-m" required value="' + esc(msModel) + '"></label>' +
-    '<label>품목<input id="ms-add-n" list="ms-dl-n" required></label><label>품번<input id="ms-add-p" required></label><button class="btn primary" type="submit">추가</button></form>' +
-    '<datalist id="ms-dl-m">' + models.map(function (m) { return '<option value="' + esc(m) + '">'; }).join("") + "</datalist>" +
-    '<datalist id="ms-dl-n">' + items.map(function (I) { return '<option value="' + esc(I.n) + '">' + esc(I.m) + "</option>"; }).join("") + "</datalist></section>";
-}
-function msChanged(msg) { msIndex(); msSave(); slSyncMap(); msRender(); document.getElementById("wh-bar-status").textContent = msg; }
+// 다시 그리기는 이벤트가 끝난 뒤에 합니다(입력 칸이 사라지면서 change/blur가 겹쳐 생기는 오류 방지).
+var msTimer = null, msMsg = "";
+function msLater(msg) { if (msg) msMsg = msg; clearTimeout(msTimer); msTimer = setTimeout(function () { msRender(); if (msMsg) msSay(msMsg); msMsg = ""; }, 0); }
+function msChanged(msg) { msIndex(); msSave(); slSyncMap(); msLater(msg); }
 (function () {
   var el = document.getElementById("ms-wrap");
   el.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-ms-model],[data-ms-del],[data-ms-seed]") : null;
+    var t = e.target.closest ? e.target.closest("[data-ms-model],[data-ms-item],[data-ms-del],[data-ms-seed]") : null;
     if (!t) return;
-    if (t.hasAttribute("data-ms-model")) { msModel = t.getAttribute("data-ms-model"); msRender(); return; }
+    if (t.hasAttribute("data-ms-model")) { msModel = t.getAttribute("data-ms-model"); msItem = ""; msRender(); return; }
+    if (t.hasAttribute("data-ms-item")) { msItem = t.getAttribute("data-ms-item"); msRender(); return; }
     if (t.hasAttribute("data-ms-seed")) { var n = msSeed(slLatest()); if (!ms.parts.length) return; msMigrateBox(); msChanged("기준정보에 " + n + "개 품번을 추가했습니다"); return; }
     var p = t.getAttribute("data-ms-del");
-    if (!confirm(p + " 품번을 기준정보에서 뺍니다. 엑셀에 이 품번이 나오면 ‘기준정보에 없는 품번’으로 표시됩니다. 계속할까요?")) return;
+    if (!confirm(msItem + "에서 " + p + " 품번을 삭제할까요? 엑셀에 이 품번이 나오면 ‘기준정보에 없는 품번’으로 표시됩니다.")) return;
     ms.parts = ms.parts.filter(function (x) { return whKey(x.p) !== whKey(p); });
-    msChanged(p + " 품번을 뺐습니다");
+    msChanged(p + " 품번을 삭제했습니다");
   });
   el.addEventListener("change", function (e) {
+    if (msBusy || !e.target.isConnected) return;   // 다시 그리면서 사라진 칸에서 늦게 온 이벤트는 무시
     var k = e.target.getAttribute && e.target.getAttribute("data-ms-box");
     if (k != null) {
       var n = Math.floor(Number(e.target.value)), nm = k.split("|")[1];
+      if ((ms.box[k] || 0) === (n > 0 ? n : 0)) return;
       if (n > 0) ms.box[k] = n; else delete ms.box[k];
       msChanged(nm + (n > 0 ? " 상자당 " + n + "개로 저장 · 상자 수와 배치도에 반영했습니다" : " 상자당 수량을 지웠습니다 · 배치도에서 빠집니다"));
       return;
     }
-    var p = e.target.getAttribute && e.target.getAttribute("data-ms-name");
-    if (p != null) {
-      var v = e.target.value.trim(), x = msPart(p);
-      if (!x || !v || v === x.n) { msRender(); return; }
-      var old = x.n; x.n = v;
-      msChanged(p + " 품번을 " + old + " → " + v + " 품목으로 옮겼습니다");
+    var old = e.target.getAttribute && e.target.getAttribute("data-ms-p");
+    if (old != null) {   // 품번 수정
+      var v = e.target.value.trim(), x = msPart(old);
+      if (!x || v === old) return;
+      if (!v) { e.target.value = old; return; }   // 비우면 원래 품번으로 (삭제는 삭제 버튼으로)
+      var dup = msPart(v);
+      if (dup && dup !== x) { msLater(v + " 품번은 이미 " + dup.m + " · " + dup.n + "에 있습니다"); return; }
+      x.p = v;
+      msChanged(old + " → " + v + " 품번을 고쳤습니다");
     }
   });
   el.addEventListener("submit", function (e) {
     if (e.target.id !== "ms-add-form") return;
     e.preventDefault();
-    var m = document.getElementById("ms-add-m").value.trim(), n = document.getElementById("ms-add-n").value.trim(), p = document.getElementById("ms-add-p").value.trim();
-    if (!m || !n || !p) return;
-    if (msPart(p)) { document.getElementById("wh-bar-status").textContent = p + " 품번은 이미 있습니다 (" + msPart(p).m + " · " + msPart(p).n + ")"; return; }
-    ms.parts.push({ m: m, n: n, p: p }); msModel = m;
-    msChanged(m + " · " + n + " · " + p + " 품번을 추가했습니다");
+    var p = document.getElementById("ms-add-p").value.trim();
+    if (!p || !msItem) return;
+    var dup = msPart(p);
+    if (dup) { msSay(p + " 품번은 이미 " + dup.m + " · " + dup.n + "에 있습니다"); return; }
+    ms.parts.push({ m: msModel, n: msItem, p: p });
+    msChanged(msItem + "에 " + p + " 품번을 추가했습니다");
+    setTimeout(function () { var f = document.getElementById("ms-add-p"); if (f) f.focus(); }, 0);
   });
 })();
 
